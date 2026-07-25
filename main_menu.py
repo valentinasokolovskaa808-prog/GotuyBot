@@ -1,36 +1,35 @@
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton
 
-# Основне меню внизу чату
+# Головне меню з кнопками
 main_menu = ReplyKeyboardMarkup(
     keyboard=[
-        [KeyboardButton(text="🍳 Сніданок"), KeyboardButton(text="🍲 Обід"), KeyboardButton(text="🥗 Вечеря")],
-        [KeyboardButton(text="🥐 Випічка"), KeyboardButton(text="🍰 Десерти")],
-        [KeyboardButton(text="🎬 Відео рецептів"), KeyboardButton(text="⭐ Нові рецепти")],
-        [KeyboardButton(text="🎲 Випадковий рецепт"), KeyboardButton(text="🔍 Пошук рецепту")],
-        [KeyboardButton(text="📲 Наші соцмережі"), KeyboardButton(text="✉️ Зв'язатися"), KeyboardButton(text="ℹ️ Про бота")]
+        [
+            KeyboardButton(text="🍳 Сніданок"),
+            KeyboardButton(text="🍲 Обід"),
+            KeyboardButton(text="🥗 Вечеря")
+        ],
+        [
+            KeyboardButton(text="🥐 Випічка"),
+            KeyboardButton(text="🍰 Десерти")
+        ],
+        [
+            KeyboardButton(text="🔎 Пошук рецепту"),
+            KeyboardButton(text="📲 Наші соцмережі")
+        ]
     ],
     resize_keyboard=True
 )
-# Інлайн-кнопки з посиланнями під повідомленням
+
+# Меню з посиланнями на соцмережі
 social_links_menu = InlineKeyboardMarkup(
     inline_keyboard=[
         [
-            InlineKeyboardButton(
-                text="📘 Facebook група", 
-                url="https://www.facebook.com/GotuyProstiRecepty"
-            )
+            InlineKeyboardButton(text="✈️ Telegram канал", url="https://t.me/gotuy_prosti_recepty"),
+            InlineKeyboardButton(text="🎵 TikTok", url="https://www.tiktok.com/@gotuy_prosti_recepty")
         ],
         [
-            InlineKeyboardButton(
-                text="🎵 TikTok", 
-                url="https://www.tiktok.com/@vitaly_is_cooking?lang=ru-RU"
-            )
-        ],
-        [
-            InlineKeyboardButton(
-                text="📸 Instagram", 
-                url="https://www.instagram.com/vitaly_is_cooking/"
-            )
+            InlineKeyboardButton(text="📷 Instagram", url="https://www.instagram.com/gotuy_prosti_recepty"),
+            InlineKeyboardButton(text="📘 Facebook", url="https://www.facebook.com/gotuy.prosti.recepty")
         ]
     ]
 )
