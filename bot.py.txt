@@ -1,0 +1,121 @@
+import asyncio
+import logging
+from http.server import HTTPServer, BaseHTTPRequestHandler
+import threading
+
+from aiogram import Bot, Dispatcher, types, F
+from aiogram.filters import CommandStart
+from aiogram.fsm.state import State, StatesGroup
+from aiogram.fsm.context import FSMContext
+
+from config import BOT_TOKEN
+from main_menu import main_menu, social_links_menu
+from database import init_db, search_recipes
+
+# --- Заглушка сервера для Render ---
+class HealthCheckHandler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200)
+        self.end_headers()
+        self.wfile.write(b"OK")
+
+def run_dummy_server():
+    server = HTTPServer(('0.0.0.0', 10000), HealthCheckHandler)
+    server.serve_forever()
+
+threading.Thread(target=run_dummy_server, daemon=True).start()
+
+# --- Ініціалізація бази даних ---
+init_db()
+
+# --- Налаштування бота ---
+logging.basicConfig(level=logging.INFO)
+bot = Bot(token=BOT_TOKEN)
+dp = Dispatcher()
+
+# --- Стан для очікування запиту пошуку ---
+class SearchRecipe(StatesGroup):
+    waiting_for_query = State()
+
+# --- 1. Команда /start ---
+@dp.message(CommandStart())
+async def start_cmd(message: types.Message, state: FSMContext):
+    await state.clear()
+    await message.answer(
+        "Ласкаво просимо до кулінарного бота «Готуй! Прості рецепти».\nОберіть потрібний розділ нижче:",
+        reply_markup=main_menu
+    )
+
+# --- 2. Обробник кнопки "Наші соцмережі" ---
+@dp.message(F.text.contains("соцмереж"))
+async def show_social_links(message: types.Message, state: FSMContext):
+    await state.clear()
+    await message.answer(
+        "<b>Готуй! Прості рецепти</b> у соцмережах! 🔍\n\n"
+        "Підписуйтесь, щоб дивитися нові відеорецепти:",
+        reply_markup=social_links_menu,
+        parse_mode="HTML"
+    )
+
+# --- 3. Старт пошуку за кнопкою "Пошук рецепту" ---
+@dp.message(F.text.contains("Пошук") | F.text.contains("пошук"))
+async def start_search(message: types.Message, state: FSMContext):
+    await state.set_state(SearchRecipe.waiting_for_query)
+    await message.answer(
+        "🔎 <b>Введіть назву страви або інгредієнт</b> (наприклад: <i>чебуреки</i>, <i>салат</i> або <i>курка</i>):",
+        parse_mode="HTML"
+    )
+
+# --- 4. Обробка пошукового запиту ---
+@dp.message(SearchRecipe.waiting_for_query)
+async def process_search(message: types.Message, state: FSMContext):
+    query = message.text.strip()
+    results = search_recipes(query)
+    
+    if not results:
+        await message.answer(
+            f"❌ На жаль, за запитом <b>«{query}»</b> нічого не знайдено.\nСпробуйте ввести іншу назву або інгредієнт:",
+            parse_mode="HTML"
+        )
+        return
+    
+    for title, ingredients, instructions, video_url in results:
+        text = f"🍳 <b>{title}</b>\n\n"
+        text += f"🛒 <b>Інгредієнти:</b>\n{ingredients}\n\n"
+        text += f"👨‍🍳 <b>Приготування:</b>\n{instructions}"
+        
+        if video_url:
+            text += f"\n\n▶️ <a href='{video_url}'>Дивитися відеорецепт</a>"
+            
+        await message.answer(text, parse_mode="HTML", disable_web_page_preview=True)
+    
+    await state.clear()
+
+# --- 5. Пошук за звичайним текстом (якщо користувач просто написав назву страви без натискання кнопки) ---
+@dp.message(F.text)
+async def default_text_search(message: types.Message, state: FSMContext):
+    query = message.text.strip()
+    results = search_recipes(query)
+    
+    if results:
+        for title, ingredients, instructions, video_url in results:
+            text = f"🍳 <b>{title}</b>\n\n"
+            text += f"🛒 <b>Інгредієнти:</b>\n{ingredients}\n\n"
+            text += f"👨‍🍳 <b>Приготування:</b>\n{instructions}"
+            
+            if video_url:
+                text += f"\n\n▶️ <a href='{video_url}'>Дивитися відеорецепт</a>"
+                
+            await message.answer(text, parse_mode="HTML", disable_web_page_preview=True)
+    else:
+        await message.answer(
+            "Скористайтеся кнопками меню нижче або введіть назву страви для пошуку (наприклад: <i>чебуреки</i>, <i>салат</i>, <i>деруни</i>):",
+            reply_markup=main_menu,
+            parse_mode="HTML"
+        )
+
+async def main():
+    await dp.start_polling(bot)
+
+if __name__ == "__main__":
+    asyncio.run(main())
