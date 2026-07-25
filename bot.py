@@ -108,6 +108,12 @@ async def show_dessert_recipes(message: types.Message, state: FSMContext):
     results = database.get_dessert_recipes()
     await send_recipe_list(message, "🍰 <b>Найкращі солодкі десерти:</b>", results)
 
+@dp.message(F.text.func(lambda text: "відео" in clean_text(text)))
+async def show_video_recipes(message: types.Message, state: FSMContext):
+    await state.clear()
+    results = database.get_video_recipes()
+    await send_recipe_list(message, "🎬 <b>Рецепти з короткими відеоуроками:</b>", results)
+
 @dp.message(F.text.func(lambda text: "соцмереж" in clean_text(text)))
 async def show_social_links(message: types.Message, state: FSMContext):
     await state.clear()
@@ -146,6 +152,9 @@ async def process_search(message: types.Message, state: FSMContext):
     elif "десерт" in cleaned_q:
         await show_dessert_recipes(message, state)
         return
+    elif "відео" in cleaned_q:
+        await show_video_recipes(message, state)
+        return
         
     results = database.search_recipes(raw_query)
     
@@ -178,6 +187,9 @@ async def default_text_search(message: types.Message, state: FSMContext):
         return
     elif "десерт" in cleaned_q:
         await show_dessert_recipes(message, state)
+        return
+    elif "відео" in cleaned_q:
+        await show_video_recipes(message, state)
         return
 
     results = database.search_recipes(raw_query)
