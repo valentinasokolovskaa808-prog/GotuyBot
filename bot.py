@@ -7,7 +7,7 @@ from aiogram.fsm.state import State, StatesGroup
 from aiogram.fsm.context import FSMContext
 
 from config import BOT_TOKEN
-from keyboards.main_menu import main_menu, social_links_menu
+from main_menu import main_menu, social_links_menu
 
 logging.basicConfig(level=logging.INFO)
 
