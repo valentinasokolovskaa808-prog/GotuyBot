@@ -13,7 +13,10 @@ main_menu = ReplyKeyboardMarkup(
             KeyboardButton(text="🍰 Десерти")
         ],
         [
-            KeyboardButton(text="🔎 Пошук рецепту"),
+            KeyboardButton(text="🎬 Відеорецепти"),
+            KeyboardButton(text="🔎 Пошук рецепту")
+        ],
+        [
             KeyboardButton(text="📲 Наші соцмережі")
         ]
     ],
