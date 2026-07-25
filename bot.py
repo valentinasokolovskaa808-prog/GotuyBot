@@ -5,7 +5,6 @@ from http.server import HTTPServer, BaseHTTPRequestHandler
 import threading
 import re
 
-# Налаштування логування для відстеження помилок у консолі Render
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -26,7 +25,6 @@ def run_dummy_server():
     logger.info(f"Starting dummy HTTP server on port {port}")
     server.serve_forever()
 
-# Запускаємо сервер у фоновому потоці
 server_thread = threading.Thread(target=run_dummy_server, daemon=True)
 server_thread.start()
 
@@ -40,7 +38,7 @@ from config import BOT_TOKEN
 from main_menu import main_menu, social_links_menu
 import database
 
-# Ініціалізація БД з обробкою помилок
+# Ініціалізація БД
 try:
     database.init_db()
     logger.info("Database initialized successfully.")
@@ -79,6 +77,7 @@ async def start_cmd(message: types.Message, state: FSMContext):
         reply_markup=main_menu
     )
 
+# --- Категорії ---
 @dp.message(F.text.func(lambda text: "сніданок" in clean_text(text)))
 async def show_breakfast_recipes(message: types.Message, state: FSMContext):
     await state.clear()
@@ -96,6 +95,18 @@ async def show_dinner_recipes(message: types.Message, state: FSMContext):
     await state.clear()
     results = database.get_dinner_recipes()
     await send_recipe_list(message, "🥗 <b>Легкі та смачні варіанти рецептів для вечері:</b>", results)
+
+@dp.message(F.text.func(lambda text: "випічка" in clean_text(text)))
+async def show_baking_recipes(message: types.Message, state: FSMContext):
+    await state.clear()
+    results = database.get_baking_recipes()
+    await send_recipe_list(message, "🥐 <b>Смачна та ароматна випічка:</b>", results)
+
+@dp.message(F.text.func(lambda text: "десерт" in clean_text(text)))
+async def show_dessert_recipes(message: types.Message, state: FSMContext):
+    await state.clear()
+    results = database.get_dessert_recipes()
+    await send_recipe_list(message, "🍰 <b>Найкращі солодкі десерти:</b>", results)
 
 @dp.message(F.text.func(lambda text: "соцмереж" in clean_text(text)))
 async def show_social_links(message: types.Message, state: FSMContext):
@@ -129,6 +140,12 @@ async def process_search(message: types.Message, state: FSMContext):
     elif "вечеря" in cleaned_q:
         await show_dinner_recipes(message, state)
         return
+    elif "випічка" in cleaned_q:
+        await show_baking_recipes(message, state)
+        return
+    elif "десерт" in cleaned_q:
+        await show_dessert_recipes(message, state)
+        return
         
     results = database.search_recipes(raw_query)
     
@@ -155,6 +172,12 @@ async def default_text_search(message: types.Message, state: FSMContext):
         return
     elif "вечеря" in cleaned_q:
         await show_dinner_recipes(message, state)
+        return
+    elif "випічка" in cleaned_q:
+        await show_baking_recipes(message, state)
+        return
+    elif "десерт" in cleaned_q:
+        await show_dessert_recipes(message, state)
         return
 
     results = database.search_recipes(raw_query)
