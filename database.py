@@ -1,7 +1,7 @@
 import sqlite3
 
 def init_db():
-    """Створює таблицю рецептів та наповнює її даними з усіма категоріями"""
+    """Створює таблицю рецептів та наповнює її початковими даними"""
     conn = sqlite3.connect("recipes.db")
     cursor = conn.cursor()
     
@@ -72,6 +72,19 @@ def init_db():
     conn.commit()
     conn.close()
 
+def add_recipe(title: str, ingredients: str, instructions: str, video_url: str, 
+               is_breakfast: int, is_lunch: int, is_dinner: int, is_baking: int, is_desserts: int):
+    """Додає новий рецепт у базу даних"""
+    conn = sqlite3.connect("recipes.db")
+    cursor = conn.cursor()
+    cursor.execute('''
+        INSERT INTO recipes 
+        (title, ingredients, instructions, video_url, is_breakfast, is_lunch, is_dinner, is_baking, is_desserts) 
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ''', (title, ingredients, instructions, video_url, is_breakfast, is_lunch, is_dinner, is_baking, is_desserts))
+    conn.commit()
+    conn.close()
+
 def search_recipes(query: str):
     conn = sqlite3.connect("recipes.db")
     cursor = conn.cursor()
@@ -129,7 +142,6 @@ def get_dessert_recipes():
     return results
 
 def get_video_recipes():
-    """Повертає всі рецепти, у яких є посилання на відео"""
     conn = sqlite3.connect("recipes.db")
     cursor = conn.cursor()
     cursor.execute('SELECT title, ingredients, instructions, video_url FROM recipes WHERE video_url IS NOT NULL AND video_url != ""')
