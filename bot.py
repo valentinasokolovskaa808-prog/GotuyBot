@@ -30,12 +30,13 @@ server_thread.start()
 
 # --- Імпорти Aiogram та модулів ---
 from aiogram import Bot, Dispatcher, types, F
-from aiogram.filters import CommandStart
+from aiogram.filters import CommandStart, Command
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.fsm.context import FSMContext
+from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 
-from config import BOT_TOKEN
-from main_menu import main_menu, social_links_menu
+from config import BOT_TOKEN, ADMIN_IDS
+from main_menu import main_menu, social_links_menu, cancel_menu, skip_video_menu
 import database
 
 # Ініціалізація БД
@@ -48,8 +49,16 @@ except Exception as e:
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher()
 
+# Стейти для FSM
 class SearchRecipe(StatesGroup):
     waiting_for_query = State()
+
+class AddRecipe(StatesGroup):
+    title = State()
+    ingredients = State()
+    instructions = State()
+    video_url = State()
+    categories = State()
 
 def clean_text(text: str) -> str:
     if not text:
@@ -69,6 +78,13 @@ async def send_recipe_list(message: types.Message, title_header: str, recipes: l
             
         await message.answer(text, parse_mode="HTML", disable_web_page_preview=True)
 
+# --- Скасування дії ---
+@dp.message(F.text == "❌ Скасувати")
+async def cancel_handler(message: types.Message, state: FSMContext):
+    await state.clear()
+    await message.answer("Дію скасовано.", reply_markup=main_menu)
+
+# --- Команда /start ---
 @dp.message(CommandStart())
 async def start_cmd(message: types.Message, state: FSMContext):
     await state.clear()
@@ -77,7 +93,115 @@ async def start_cmd(message: types.Message, state: FSMContext):
         reply_markup=main_menu
     )
 
-# --- Категорії ---
+# --- АДМІН-ПАНЕЛЬ ---
+@dp.message(Command("admin"))
+async def admin_start(message: types.Message, state: FSMContext):
+    if message.from_user.id not in ADMIN_IDS:
+        await message.answer("❌ У вас немає прав доступу до панелі адміністратора.")
+        return
+
+    await state.set_state(AddRecipe.title)
+    await message.answer(
+        "👑 <b>Панель додавання нового рецепта</b>\n\nВведіть <b>назву</b> рецепта:",
+        parse_mode="HTML",
+        reply_markup=cancel_menu
+    )
+
+@dp.message(AddRecipe.title)
+async def process_title(message: types.Message, state: FSMContext):
+    await state.update_data(title=message.text.strip())
+    await state.set_state(AddRecipe.ingredients)
+    await message.answer("🛒 Введіть <b>інгредієнти</b> (або вкажіть 'Рецепт та деталі у відео'):", parse_mode="HTML")
+
+@dp.message(AddRecipe.ingredients)
+async def process_ingredients(message: types.Message, state: FSMContext):
+    await state.update_data(ingredients=message.text.strip())
+    await state.set_state(AddRecipe.instructions)
+    await message.answer("👨‍🍳 Введіть <b>інструкцію з приготування</b> (або 'Дивіться відеорецепт у каналі'):", parse_mode="HTML")
+
+@dp.message(AddRecipe.instructions)
+async def process_instructions(message: types.Message, state: FSMContext):
+    await state.update_data(instructions=message.text.strip())
+    await state.set_state(AddRecipe.video_url)
+    await message.answer(
+        "▶️ Введіть <b>посилання на відеорецепт</b> (наприклад, https://t.me/gotuy_prosti_recepty/1999) або натисніть «Пропустити відео»:",
+        parse_mode="HTML",
+        reply_markup=skip_video_menu
+    )
+
+def get_category_keyboard(selected: dict):
+    def check_mark(val):
+        return "✅" if val else "❌"
+    
+    kb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text=f"{check_mark(selected['breakfast'])} Сніданок", callback_data="toggle_breakfast")],
+        [InlineKeyboardButton(text=f"{check_mark(selected['lunch'])} Обід", callback_data="toggle_lunch")],
+        [InlineKeyboardButton(text=f"{check_mark(selected['dinner'])} Вечеря", callback_data="toggle_dinner")],
+        [InlineKeyboardButton(text=f"{check_mark(selected['baking'])} Випічка", callback_data="toggle_baking")],
+        [InlineKeyboardButton(text=f"{check_mark(selected['desserts'])} Десерти", callback_data="toggle_desserts")],
+        [InlineKeyboardButton(text="💾 Зберегти рецепт", callback_data="save_recipe")]
+    ])
+    return kb
+
+@dp.message(AddRecipe.video_url)
+async def process_video(message: types.Message, state: FSMContext):
+    url = message.text.strip()
+    if url == "Пропустити відео":
+        url = ""
+    
+    await state.update_data(video_url=url)
+    
+    categories = {
+        'breakfast': 0,
+        'lunch': 0,
+        'dinner': 0,
+        'baking': 0,
+        'desserts': 0
+    }
+    await state.update_data(categories=categories)
+    await state.set_state(AddRecipe.categories)
+    
+    await message.answer(
+        "📌 Оберіть <b>категорії</b> для цього рецепта (можна обрати декілька) та натисніть <b>Зберегти рецепт</b>:",
+        reply_markup=get_category_keyboard(categories),
+        parse_mode="HTML"
+    )
+
+@dp.callback_query(F.data.startswith("toggle_"))
+async def toggle_category(callback: types.CallbackQuery, state: FSMContext):
+    data = await state.get_data()
+    categories = data.get("categories", {})
+    cat_key = callback.data.replace("toggle_", "")
+    
+    if cat_key in categories:
+        categories[cat_key] = 1 if categories[cat_key] == 0 else 0
+        await state.update_data(categories=categories)
+        await callback.message.edit_reply_markup(reply_markup=get_category_keyboard(categories))
+    await callback.answer()
+
+@dp.callback_query(F.data == "save_recipe")
+async def save_recipe_callback(callback: types.CallbackQuery, state: FSMContext):
+    data = await state.get_data()
+    cats = data.get("categories", {})
+    
+    database.add_recipe(
+        title=data.get("title"),
+        ingredients=data.get("ingredients"),
+        instructions=data.get("instructions"),
+        video_url=data.get("video_url"),
+        is_breakfast=cats.get("breakfast", 0),
+        is_lunch=cats.get("lunch", 0),
+        is_dinner=cats.get("dinner", 0),
+        is_baking=cats.get("baking", 0),
+        is_desserts=cats.get("desserts", 0)
+    )
+    
+    await callback.message.edit_text(f"✅ Рецепт <b>«{data.get('title')}»</b> успішно збережено в базу!", parse_mode="HTML")
+    await callback.message.answer("Головне меню:", reply_markup=main_menu)
+    await state.clear()
+    await callback.answer()
+
+# --- Клієнтські категорії ---
 @dp.message(F.text.func(lambda text: "сніданок" in clean_text(text)))
 async def show_breakfast_recipes(message: types.Message, state: FSMContext):
     await state.clear()
