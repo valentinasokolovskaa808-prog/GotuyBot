@@ -1,7 +1,10 @@
 import os
+import re
 
-# Отримуємо токен та автоматично видаляємо всі випадкові пробіли, переноси рядків або таби
+# Отримуємо значення з Environment Variable або вставленого рядка
 RAW_TOKEN = os.getenv("BOT_TOKEN", "8005346082:AAGx52ien9wTW2vcSSA_mLBEaX-cPDBffPM")
-BOT_TOKEN = RAW_TOKEN.strip()
+
+# Жорстко очищаємо токен від усього зайвого (пробіли, лапки, переноси рядків)
+BOT_TOKEN = re.sub(r'\s+', '', RAW_TOKEN).strip('"\'')
 
 ADMIN_IDS = [5270272994]
