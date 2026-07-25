@@ -1,7 +1,5 @@
-BOT_TOKEN = "8891216844:AAEtznGW5kgTs1cnTbHisY0FlX9ojrMrqTc"
 import os
 
-BOT_TOKEN = os.getenv("BOT_TOKEN", "YOUR_BOT_TOKEN_HERE")
+BOT_TOKEN = os.getenv("BOT_TOKEN", "1234567890:ABCdefGHIjklMNOpqrsTUVwxyz")  # Вкажіть свій справжній токен без пробілів
 
-# Telegram User ID адміністратора
 ADMIN_IDS = [5270272994]
