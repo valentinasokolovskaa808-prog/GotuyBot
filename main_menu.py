@@ -36,3 +36,18 @@ social_links_menu = InlineKeyboardMarkup(
         ]
     ]
 )
+
+# Кнопка скасування створення рецепта
+cancel_menu = ReplyKeyboardMarkup(
+    keyboard=[[KeyboardButton(text="❌ Скасувати")]],
+    resize_keyboard=True
+)
+
+# Клавіатура пропуску посилання на відео
+skip_video_menu = ReplyKeyboardMarkup(
+    keyboard=[
+        [KeyboardButton(text="Пропустити відео")],
+        [KeyboardButton(text="❌ Скасувати")]
+    ],
+    resize_keyboard=True
+)
