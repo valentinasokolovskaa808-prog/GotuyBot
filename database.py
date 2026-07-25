@@ -22,7 +22,6 @@ def init_db():
         )
     ''')
     
-    # Формат: (title, ingredients, instructions, video_url, is_breakfast, is_lunch, is_dinner, is_baking, is_desserts)
     sample_recipes = [
         ("Салат із крабовими паличками, сиром та помідорами", "Рецепт та деталі у відео", "Дивіться відеорецепт у каналі", "https://t.me/gotuy_prosti_recepty/2000", 0, 1, 1, 0, 0),
         ("Маковий лимонний торт", "Рецепт та деталі у відео", "Дивіться відеорецепт у каналі", "https://t.me/gotuy_prosti_recepty/1999", 0, 0, 0, 1, 1),
@@ -74,7 +73,6 @@ def init_db():
     conn.close()
 
 def search_recipes(query: str):
-    """Шукає рецепти за ключовим словом"""
     conn = sqlite3.connect("recipes.db")
     cursor = conn.cursor()
     cursor.execute('SELECT title, ingredients, instructions, video_url FROM recipes')
@@ -115,7 +113,6 @@ def get_dinner_recipes():
     return results
 
 def get_baking_recipes():
-    """Повертає всі рецепти випічки"""
     conn = sqlite3.connect("recipes.db")
     cursor = conn.cursor()
     cursor.execute('SELECT title, ingredients, instructions, video_url FROM recipes WHERE is_baking = 1')
@@ -124,10 +121,18 @@ def get_baking_recipes():
     return results
 
 def get_dessert_recipes():
-    """Повертає всі рецепти десертів"""
     conn = sqlite3.connect("recipes.db")
     cursor = conn.cursor()
     cursor.execute('SELECT title, ingredients, instructions, video_url FROM recipes WHERE is_desserts = 1')
+    results = cursor.fetchall()
+    conn.close()
+    return results
+
+def get_video_recipes():
+    """Повертає всі рецепти, у яких є посилання на відео"""
+    conn = sqlite3.connect("recipes.db")
+    cursor = conn.cursor()
+    cursor.execute('SELECT title, ingredients, instructions, video_url FROM recipes WHERE video_url IS NOT NULL AND video_url != ""')
     results = cursor.fetchall()
     conn.close()
     return results
