@@ -1,7 +1,7 @@
 import sqlite3
 
 def init_db():
-    """Створює таблицю рецептів та наповнює її даними з категоріями (Сніданок, Обід, Вечеря)"""
+    """Створює таблицю рецептів та наповнює її даними з категоріями"""
     conn = sqlite3.connect("recipes.db")
     cursor = conn.cursor()
     
@@ -20,7 +20,6 @@ def init_db():
         )
     ''')
     
-    # Формат: (title, ingredients, instructions, video_url, is_breakfast, is_lunch, is_dinner)
     sample_recipes = [
         ("Салат із крабовими паличками, сиром та помідорами", "Рецепт та деталі у відео", "Дивіться відеорецепт у каналі", "https://t.me/gotuy_prosti_recepty/2000", 0, 1, 1),
         ("Маковий лимонний торт", "Рецепт та деталі у відео", "Дивіться відеорецепт у каналі", "https://t.me/gotuy_prosti_recepty/1999", 0, 0, 0),
@@ -75,7 +74,6 @@ def search_recipes(query: str):
     """Шукає рецепти за ключовим словом"""
     conn = sqlite3.connect("recipes.db")
     cursor = conn.cursor()
-    
     cursor.execute('SELECT title, ingredients, instructions, video_url FROM recipes')
     all_recipes = cursor.fetchall()
     conn.close()
