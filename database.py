@@ -69,17 +69,19 @@ def init_db():
     conn.close()
 
 def search_recipes(query: str):
-    """Шукає рецепти за ключовим словом у назві або інгредієнтах"""
+    """Гнучкий точний пошук без обмежень кирилиці в SQLite"""
     conn = sqlite3.connect("recipes.db")
     cursor = conn.cursor()
     
-    search_pattern = f"%{query.lower()}%"
-    cursor.execute('''
-        SELECT title, ingredients, instructions, video_url 
-        FROM recipes 
-        WHERE LOWER(title) LIKE ? OR LOWER(ingredients) LIKE ?
-    ''', (search_pattern, search_pattern))
-    
-    results = cursor.fetchall()
+    cursor.execute('SELECT title, ingredients, instructions, video_url FROM recipes')
+    all_recipes = cursor.fetchall()
     conn.close()
+    
+    query_clean = query.strip().lower()
+    results = []
+    
+    for title, ingredients, instructions, video_url in all_recipes:
+        if query_clean in title.lower() or query_clean in ingredients.lower():
+            results.append((title, ingredients, instructions, video_url))
+            
     return results
