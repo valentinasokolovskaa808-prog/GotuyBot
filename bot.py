@@ -123,7 +123,6 @@ async def process_link(message: types.Message, state: FSMContext):
     
     try:
         if hasattr(db, 'add_recipe'):
-            # Передаємо точно ті параметри, які вимагає database.py
             db.add_recipe(
                 title=user_data['title'],
                 ingredients=user_data['ingredients'],
@@ -153,25 +152,39 @@ async def process_link(message: types.Message, state: FSMContext):
 @dp.message()
 async def search_handler(message: types.Message):
     query = message.text.strip()
-    if not query:
+    if not query or query.startswith("/"):
         return
 
     if hasattr(db, 'search_recipes'):
-        results = db.search_recipes(query)
-        if results:
-            for recipe in results[:3]:
-                text = f"🍳 **{recipe.get('title', 'Рецепт')}**\n\n"
-                if 'ingredients' in recipe:
-                    text += f"🛒 **Інгредієнти:**\n{recipe['ingredients']}\n\n"
-                if 'instructions' in recipe:
-                    text += f"👩‍🍳 **Приготування:**\n{recipe['instructions']}\n"
-                if recipe.get('link') or recipe.get('video_url'):
-                    url = recipe.get('link') or recipe.get('video_url')
-                    text += f"\n🔗 [Дивитися відео]({url})"
+        try:
+            results = db.search_recipes(query)
+            if results:
+                for recipe in results[:5]:
+                    if isinstance(recipe, dict):
+                        title = recipe.get('title', 'Рецепт')
+                        ingr = recipe.get('ingredients', '')
+                        instr = recipe.get('instructions', '')
+                        url = recipe.get('video_url') or recipe.get('link', '')
+                    else:
+                        title = recipe[1] if len(recipe) > 1 else 'Рецепт'
+                        ingr = recipe[2] if len(recipe) > 2 else ''
+                        instr = recipe[3] if len(recipe) > 3 else ''
+                        url = recipe[4] if len(recipe) > 4 else ''
 
-                await message.answer(text, parse_mode="Markdown")
-        else:
-            await message.answer("Нічого не знайдено 😔")
+                    text = f"🍳 **{title}**\n\n"
+                    if ingr:
+                        text += f"🛒 **Інгредієнти:**\n{ingr}\n\n"
+                    if instr:
+                        text += f"👩‍🍳 **Приготування:**\n{instr}\n"
+                    if url and url != "-":
+                        text += f"\n🔗 [Дивитися відео]({url})"
+
+                    await message.answer(text, parse_mode="Markdown")
+            else:
+                await message.answer("Нічого не знайдено 😔 Спробуйте пошукати по-іншому (наприклад, за назвою або інгредієнтом).")
+        except Exception as e:
+            logger.error(f"Помилка пошуку: {e}")
+            await message.answer(f"❌ Помилка при пошуку: {e}")
 
 
 # --- ГОЛОВНА ФУНКЦІЯ ---
