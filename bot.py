@@ -3,6 +3,8 @@ import re
 import asyncio
 import logging
 import sys
+import threading
+from http.server import HTTPServer, BaseHTTPRequestHandler
 
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.filters import CommandStart, Command
@@ -11,11 +13,26 @@ from aiogram.fsm.state import State, StatesGroup
 from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 
-# Імпортуємо ваші налаштування та функції бази даних
 from config import BOT_TOKEN, ADMIN_IDS
 import database as db
 
-# Детальні логи для Render
+# --- ФЕЙКОВИЙ СЕРВЕР ДЛЯ БЕЗКОШТОВНОГО ТАРИФУ RENDER ---
+class DummyServer(BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200)
+        self.end_headers()
+        self.wfile.write(b"Bot is alive!")
+
+def run_dummy_server():
+    port = int(os.environ.get("PORT", 10000))
+    server = HTTPServer(('0.0.0.0', port), DummyServer)
+    server.serve_forever()
+
+# Запускаємо фейковий сервер в окремому потоці
+threading.Thread(target=run_dummy_server, daemon=True).start()
+
+
+# --- НАЛАШТУВАННЯ ЛОГІВ ТА БОТА ---
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(levelname)s - %(name)s - %(message)s",
@@ -23,11 +40,11 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Ініціалізація бота
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher(storage=MemoryStorage())
 
-# --- FSM (Стани для додавання рецепта) ---
+
+# --- FSM (Стани) ---
 class AddRecipeFSM(StatesGroup):
     title = State()
     ingredients = State()
@@ -36,17 +53,15 @@ class AddRecipeFSM(StatesGroup):
 
 # --- КЛАВІАТУРИ ---
 def get_admin_keyboard():
-    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+    return InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="➕ Додати рецепт", callback_data="add_recipe")],
         [InlineKeyboardButton(text="📊 Статистика", callback_data="stats")]
     ])
-    return keyboard
 
 def get_cancel_keyboard():
-    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+    return InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="❌ Скасувати", callback_data="cancel")]
     ])
-    return keyboard
 
 
 # --- ОБРОБНИКИ КОМАНД ---
@@ -66,7 +81,7 @@ async def admin_handler(message: types.Message):
         await message.answer("У вас немає доступу до цієї команди.")
 
 
-# --- СЦЕНАРІЙ ДОДАВАННЯ РЕЦЕПТУ (FSM) ---
+# --- СЦЕНАРІЙ ДОДАВАННЯ РЕЦЕПТУ ---
 
 @dp.callback_query(F.data == "add_recipe")
 async def start_add_recipe(callback: types.CallbackQuery, state: FSMContext):
@@ -87,7 +102,7 @@ async def cancel_handler(callback: types.CallbackQuery, state: FSMContext):
 async def process_title(message: types.Message, state: FSMContext):
     await state.update_data(title=message.text)
     await state.set_state(AddRecipeFSM.ingredients)
-    await message.answer("Крок 2/4: Введіть **інгредієнти** (через кому або списком):", reply_markup=get_cancel_keyboard(), parse_mode="Markdown")
+    await message.answer("Крок 2/4: Введіть **інгредієнти**:", reply_markup=get_cancel_keyboard(), parse_mode="Markdown")
 
 @dp.message(AddRecipeFSM.ingredients)
 async def process_ingredients(message: types.Message, state: FSMContext):
@@ -99,14 +114,13 @@ async def process_ingredients(message: types.Message, state: FSMContext):
 async def process_instructions(message: types.Message, state: FSMContext):
     await state.update_data(instructions=message.text)
     await state.set_state(AddRecipeFSM.link)
-    await message.answer("Крок 4/4: Введіть **посилання на відео/канал** (або напишіть `-` якщо немає):", reply_markup=get_cancel_keyboard(), parse_mode="Markdown")
+    await message.answer("Крок 4/4: Введіть **посилання на відео** (або `-`):", reply_markup=get_cancel_keyboard(), parse_mode="Markdown")
 
 @dp.message(AddRecipeFSM.link)
 async def process_link(message: types.Message, state: FSMContext):
     link = message.text if message.text != "-" else ""
     user_data = await state.get_data()
     
-    # Збереження в базу даних через функцію вашого database.py
     try:
         if hasattr(db, 'add_recipe'):
             db.add_recipe(
@@ -115,18 +129,15 @@ async def process_link(message: types.Message, state: FSMContext):
                 instructions=user_data['instructions'],
                 link=link
             )
-        else:
-            logger.warning("Функція add_recipe() не знайдена в database.py")
 
         await message.answer(
             f"✅ **Рецепт успішно додано!**\n\n"
-            f"📌 **Назва:** {user_data['title']}\n"
-            f"📝 **Інгредієнти:** {user_data['ingredients']}",
+            f"📌 **Назва:** {user_data['title']}",
             parse_mode="Markdown"
         )
     except Exception as e:
-        logger.error(f"Помилка при збереженні рецепта: {e}")
-        await message.answer(f"❌ Помилка при збереженні в базу даних: {e}")
+        logger.error(f"Помилка: {e}")
+        await message.answer(f"❌ Помилка: {e}")
 
     await state.clear()
 
@@ -139,12 +150,10 @@ async def search_handler(message: types.Message):
     if not query:
         return
 
-    # Пошук у вашій базі даних
     if hasattr(db, 'search_recipes'):
         results = db.search_recipes(query)
         if results:
-            for recipe in results[:3]:  # показуємо перші 3
-                # Адаптуйте поля під ваші колонки з бази даних
+            for recipe in results[:3]:
                 text = f"🍳 **{recipe.get('title', 'Рецепт')}**\n\n"
                 if 'ingredients' in recipe:
                     text += f"🛒 **Інгредієнти:**\n{recipe['ingredients']}\n\n"
@@ -155,25 +164,17 @@ async def search_handler(message: types.Message):
 
                 await message.answer(text, parse_mode="Markdown")
         else:
-            await message.answer("За вашим запитом нічого не знайдено 😔 Спробуйте іншу назву або інгредієнт.")
-    else:
-        await message.answer(f"Ви написали: {query}")
+            await message.answer("Нічого не знайдено 😔")
 
 
-# --- ГОЛОВНА ФУНКЦІЯ ЗАПУСКУ ---
+# --- ГОЛОВНА ФУНКЦІЯ ---
 
 async def main():
-    # Ініціалізація БД якщо є така функція
     if hasattr(db, 'init_db'):
         db.init_db()
 
-    # Скидаємо залишкові вебхуки
     await bot.delete_webhook(drop_pending_updates=True)
-    
-    logger.info("=" * 50)
     logger.info("БОТ З АДМІН-ПАНЕЛЛЮ УСПІШНО ЗАПУЩЕНИЙ")
-    logger.info("=" * 50)
-    
     await dp.start_polling(bot)
 
 if __name__ == "__main__":
