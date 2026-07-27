@@ -10,7 +10,7 @@ from aiogram.filters import CommandStart, Command
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.fsm.storage.memory import MemoryStorage
-from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton
 
 from config import BOT_TOKEN, ADMIN_IDS
 import database as db
@@ -52,6 +52,18 @@ class AddRecipeFSM(StatesGroup):
 
 
 # --- КЛАВІАТУРИ ---
+
+# Текстові кнопки категорій для користувачів
+def get_main_keyboard():
+    return ReplyKeyboardMarkup(
+        keyboard=[
+            [KeyboardButton(text="🌅 Сніданок"), KeyboardButton(text="☀️ Обід")],
+            [KeyboardButton(text="🌙 Вечеря"), KeyboardButton(text="🥐 Випічка")],
+            [KeyboardButton(text="🍰 Десерти")]
+        ],
+        resize_keyboard=True
+    )
+
 def get_admin_keyboard():
     return InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="➕ Додати рецепт", callback_data="add_recipe")],
@@ -70,7 +82,8 @@ def get_cancel_keyboard():
 async def start_handler(message: types.Message):
     await message.answer(
         "Привіт! Я ваш кулінарний бот 🍳\n\n"
-        "Введіть назву страви або інгредієнти, щоб знайти рецепт."
+        "Оберіть категорію нижче або просто напишіть назву страви/інгредієнт для пошуку:",
+        reply_markup=get_main_keyboard()
     )
 
 @dp.message(Command("admin"))
@@ -81,7 +94,7 @@ async def admin_handler(message: types.Message):
         await message.answer("У вас немає доступу до цієї команди.")
 
 
-# --- СЦЕНАРІЙ ДОДАВАННЯ РЕЦЕПТУ ---
+# --- СЦЕНАРІЙ ДОДАВАННЯ РЕЦЕПТУ ТА ІНШІ КНОПКИ ---
 
 @dp.callback_query(F.data == "add_recipe")
 async def start_add_recipe(callback: types.CallbackQuery, state: FSMContext):
@@ -90,6 +103,26 @@ async def start_add_recipe(callback: types.CallbackQuery, state: FSMContext):
     
     await state.set_state(AddRecipeFSM.title)
     await callback.message.answer("Крок 1/4: Введіть **назву рецепта**:", reply_markup=get_cancel_keyboard(), parse_mode="Markdown")
+    await callback.answer()
+
+@dp.callback_query(F.data == "stats")
+async def stats_handler(callback: types.CallbackQuery):
+    if callback.from_user.id not in ADMIN_IDS:
+        return await callback.answer("Немає доступу.", show_alert=True)
+    
+    count = 0
+    try:
+        if hasattr(db, 'get_recipes_count'):
+            count = db.get_recipes_count()
+        elif hasattr(db, 'get_all_recipes'):
+            count = len(db.get_all_recipes())
+        elif hasattr(db, 'search_recipes'):
+            all_res = db.search_recipes("")
+            count = len(all_res) if all_res else 0
+    except Exception as e:
+        logger.error(f"Помилка отримання статистики: {e}")
+
+    await callback.message.answer(f"📊 **Статистика бази даних:**\n\nВсього рецептів у базі: **{count}**", parse_mode="Markdown")
     await callback.answer()
 
 @dp.callback_query(F.data == "cancel")
@@ -147,13 +180,24 @@ async def process_link(message: types.Message, state: FSMContext):
     await state.clear()
 
 
-# --- ПОШУК РЕЦЕПТІВ ---
+# --- КНОПКИ КАТЕГОРІЙ ТА ПОШУК ---
+
+CATEGORY_CLEAN = {
+    "🌅 Сніданок": "Сніданок",
+    "☀️ Обід": "Обід",
+    "🌙 Вечеря": "Вечеря",
+    "🥐 Випічка": "Випічка",
+    "🍰 Десерти": "Десерт"
+}
 
 @dp.message()
 async def search_handler(message: types.Message):
-    query = message.text.strip()
-    if not query or query.startswith("/"):
+    raw_text = message.text.strip()
+    if not raw_text or raw_text.startswith("/"):
         return
+
+    # Перевіряємо, чи це кнопка категорії (прибираємо смайлик)
+    query = CATEGORY_CLEAN.get(raw_text, raw_text)
 
     if hasattr(db, 'search_recipes'):
         try:
@@ -180,7 +224,6 @@ async def search_handler(message: types.Message):
                         if len(recipe) > 4 and recipe[4]:
                             url = str(recipe[4])
 
-                    # Якщо назва заглушка, пробуємо дістати її з елементів кортежу
                     if title == "Рецепт та деталі у відео" or title == "Рецепт":
                         if isinstance(recipe, (list, tuple)):
                             for item in recipe:
@@ -201,7 +244,7 @@ async def search_handler(message: types.Message):
 
                     await message.answer(text, parse_mode="Markdown")
             else:
-                await message.answer("Нічого не знайдено 😔 Спробуйте пошукати за іншим словом.")
+                await message.answer("Нічого не знайдено 😔 Спробуйте пошукати за іншим словом або категорією.")
         except Exception as e:
             logger.error(f"Помилка пошуку: {e}")
             await message.answer(f"❌ Помилка при пошуку: {e}")
