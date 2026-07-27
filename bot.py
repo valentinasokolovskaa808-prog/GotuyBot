@@ -1,5 +1,4 @@
 import os
-import re
 import asyncio
 import logging
 import sys
@@ -50,6 +49,7 @@ class AddRecipeFSM(StatesGroup):
     ingredients = State()
     instructions = State()
     link = State()
+
 
 # --- КЛАВІАТУРИ ---
 def get_admin_keyboard():
@@ -123,12 +123,21 @@ async def process_link(message: types.Message, state: FSMContext):
     
     try:
         if hasattr(db, 'add_recipe'):
-            db.add_recipe(
-                title=user_data['title'],
-                ingredients=user_data['ingredients'],
-                instructions=user_data['instructions'],
-                link=link
-            )
+            try:
+                # Пробуємо передати з посиланням
+                db.add_recipe(
+                    user_data['title'],
+                    user_data['ingredients'],
+                    user_data['instructions'],
+                    link
+                )
+            except TypeError:
+                # Якщо БД приймає тільки 3 аргументи
+                db.add_recipe(
+                    user_data['title'],
+                    user_data['ingredients'],
+                    user_data['instructions']
+                )
 
         await message.answer(
             f"✅ **Рецепт успішно додано!**\n\n"
@@ -136,7 +145,7 @@ async def process_link(message: types.Message, state: FSMContext):
             parse_mode="Markdown"
         )
     except Exception as e:
-        logger.error(f"Помилка: {e}")
+        logger.error(f"Помилка при додаванні: {e}")
         await message.answer(f"❌ Помилка: {e}")
 
     await state.clear()
