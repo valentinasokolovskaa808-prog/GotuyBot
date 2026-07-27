@@ -6,7 +6,7 @@ def get_connection():
     return sqlite3.connect(DATABASE_NAME)
 
 def init_db():
-    """Створює таблицю рецептів, якщо її ще немає (без видалення існуючих даних)."""
+    """Створює таблицю рецептів, якщо її ще немає."""
     conn = get_connection()
     cursor = conn.cursor()
     
@@ -36,7 +36,7 @@ def add_recipe(title, ingredients, instructions, video_url, is_breakfast=0, is_l
     cursor.execute('''
         INSERT INTO recipes (title, ingredients, instructions, video_url, is_breakfast, is_lunch, is_dinner, is_baking, is_desserts)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-    ''', (title, ingredients, instructions, video_url, is_breakfast, is_lunch, is_dinner, is_baking, is_desserts))
+    ''', (title.strip(), ingredients.strip(), instructions.strip(), video_url.strip(), is_breakfast, is_lunch, is_dinner, is_baking, is_desserts))
     
     conn.commit()
     conn.close()
@@ -90,17 +90,23 @@ def get_video_recipes():
     return recipes
 
 def search_recipes(query):
-    """Шукає рецепти за назвою або інгредієнтами незалежно від регістру літер."""
+    """Шукає рецепти за допомогою Python (100% працює з кирилицею та українськими літерами)."""
     conn = get_connection()
     cursor = conn.cursor()
-    search_query = f"%{query.strip().lower()}%"
     
-    cursor.execute('''
-        SELECT title, ingredients, instructions, video_url 
-        FROM recipes 
-        WHERE LOWER(title) LIKE ? OR LOWER(ingredients) LIKE ?
-    ''', (search_query, search_query))
-    
-    recipes = cursor.fetchall()
+    cursor.execute("SELECT title, ingredients, instructions, video_url FROM recipes")
+    all_recipes = cursor.fetchall()
     conn.close()
-    return recipes
+    
+    search_query = query.strip().lower()
+    matched_recipes = []
+    
+    for recipe in all_recipes:
+        title = recipe[0] or ""
+        ingredients = recipe[1] or ""
+        
+        # Перевіряємо входження слова у назву або інгредієнти
+        if search_query in title.lower() or search_query in ingredients.lower():
+            matched_recipes.append(recipe)
+            
+    return matched_recipes
