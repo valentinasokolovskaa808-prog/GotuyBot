@@ -5,13 +5,20 @@ from http.server import HTTPServer, BaseHTTPRequestHandler
 from threading import Thread
 from aiogram import Bot, Dispatcher, F, types
 from aiogram.filters import Command
-from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, ReplyKeyboardMarkup, KeyboardButton
+from aiogram.types import (
+    InlineKeyboardMarkup, InlineKeyboardButton, 
+    ReplyKeyboardMarkup, KeyboardButton
+)
 
 logging.basicConfig(level=logging.INFO)
 
 TOKEN = os.getenv("BOT_TOKEN")
 if not TOKEN:
     raise ValueError("Помилка: BOT_TOKEN не знайдено в змінних оточення!")
+
+# Вкажіть ваш Telegram ID (або залиште None, якщо адмінка має бути доступна без обмежень)
+# Наприклад: ADMIN_ID = 123456789
+ADMIN_ID = os.getenv("ADMIN_ID", None)
 
 bot = Bot(token=TOKEN)
 dp = Dispatcher()
@@ -53,6 +60,12 @@ def get_main_reply_keyboard():
         resize_keyboard=True
     )
 
+def get_admin_keyboard():
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="📊 Статистика бази", callback_data="admin_stats")],
+        [InlineKeyboardButton(text="🔄 Переініціалізувати базу", callback_data="admin_reinit")]
+    ])
+
 def get_social_keyboard():
     return InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="🔹 Telegram канал", url="https://t.me/gotuy_prosti_recepty")],
@@ -63,7 +76,6 @@ def get_social_keyboard():
 
 
 # --- Відправка картки кожного рецепта окремо ---
-
 async def send_recipe_cards(message: types.Message, recipes: list, category_title: str = None):
     if not recipes:
         await message.answer(f"У категорії **{category_title}** поки немає рецептів 😔", parse_mode="Markdown")
@@ -72,7 +84,6 @@ async def send_recipe_cards(message: types.Message, recipes: list, category_titl
     if category_title:
         await message.answer(f"📋 **Знайдено рецепти ({len(recipes)}):**", parse_mode="Markdown")
 
-    # Виводимо рецепти по черзі
     for r in recipes:
         title, ingredients, instructions, video_url = r
         
@@ -87,12 +98,11 @@ async def send_recipe_cards(message: types.Message, recipes: list, category_titl
         if video_url:
             text += f"🔗 [Дивитися відеорецепт]({video_url})"
 
-        # disable_web_page_preview=False повертає прев'ю/картинку з посилання Telegram
         await message.answer(text, parse_mode="Markdown", disable_web_page_preview=False)
-        await asyncio.sleep(0.3)  # Невелика пауза, щоб Telegram гарно виводив картки послідовно
+        await asyncio.sleep(0.3)
 
 
-# --- Обробник команд ---
+# --- Команди ---
 
 @dp.message(Command("start"))
 async def start_cmd(message: types.Message):
@@ -106,7 +116,53 @@ async def start_cmd(message: types.Message):
     )
 
 
-# --- Обробник повідомлень ---
+@dp.message(Command("admin"))
+async def admin_cmd(message: types.Message):
+    if ADMIN_ID and str(message.from_user.id) != str(ADMIN_ID):
+        await message.answer("⛔ У вас немає доступу до панелі адміністратора.")
+        return
+
+    await message.answer(
+        "⚙️ **Панель адміністратора**\n\nОберіть дію:",
+        parse_mode="Markdown",
+        reply_markup=get_admin_keyboard()
+    )
+
+
+@dp.callback_query(F.data == "admin_stats")
+async def process_admin_stats(callback: types.CallbackQuery):
+    await callback.answer()
+    
+    conn = database.get_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT COUNT(*) FROM recipes")
+    total = cursor.fetchone()[0]
+    
+    cursor.execute("SELECT COUNT(*) FROM recipes WHERE is_breakfast = 1")
+    bf = cursor.fetchone()[0]
+    cursor.execute("SELECT COUNT(*) FROM recipes WHERE is_lunch = 1")
+    ln = cursor.fetchone()[0]
+    cursor.execute("SELECT COUNT(*) FROM recipes WHERE is_dinner = 1")
+    dn = cursor.fetchone()[0]
+    cursor.execute("SELECT COUNT(*) FROM recipes WHERE is_baking = 1")
+    bk = cursor.fetchone()[0]
+    cursor.execute("SELECT COUNT(*) FROM recipes WHERE is_desserts = 1")
+    ds = cursor.fetchone()[0]
+    conn.close()
+
+    stats_text = (
+        f"📊 **Статистика бази даних:**\n\n"
+        f"• Всього рецептів: **{total}**\n"
+        f"• Сніданки: **{bf}**\n"
+        f"• Обіди: **{ln}**\n"
+        f"• Вечері: **{dn}**\n"
+        f"• Випічка: **{bk}**\n"
+        f"• Десерти: **{ds}**"
+    )
+    await callback.message.answer(stats_text, parse_mode="Markdown")
+
+
+# --- Обробник текстових повідомлень ---
 
 @dp.message()
 async def main_handler(message: types.Message):
@@ -116,37 +172,30 @@ async def main_handler(message: types.Message):
 
     text_lower = text.lower()
 
-    # 1. Сніданок
     if "сніданок" in text_lower:
         recipes = database.get_breakfast_recipes()
         await send_recipe_cards(message, recipes, "Сніданки")
 
-    # 2. Обід
     elif "обід" in text_lower:
         recipes = database.get_lunch_recipes()
         await send_recipe_cards(message, recipes, "Обіди")
 
-    # 3. Вечеря
     elif "вечеря" in text_lower:
         recipes = database.get_dinner_recipes()
         await send_recipe_cards(message, recipes, "Вечері")
 
-    # 4. Випічка
     elif "випічка" in text_lower:
         recipes = database.get_baking_recipes()
         await send_recipe_cards(message, recipes, "Випічка")
 
-    # 5. Десерти
     elif "десерт" in text_lower:
         recipes = database.get_dessert_recipes()
         await send_recipe_cards(message, recipes, "Десерти")
 
-    # 6. Відеорецепти
     elif "відеорецепти" in text_lower or "відео" in text_lower:
         recipes = database.get_video_recipes()
         await send_recipe_cards(message, recipes, "Відеорецепти")
 
-    # 7. Як шукати / Пошук рецепту
     elif "пошук рецепту" in text_lower or "як шукати" in text_lower:
         await message.answer(
             "💡 **Як користуватися пошуком:**\n\n"
@@ -157,7 +206,6 @@ async def main_handler(message: types.Message):
             parse_mode="Markdown"
         )
 
-    # 8. Наші соцмережі
     elif "соцмережі" in text_lower:
         await message.answer(
             "📲 **Наші офіційні сторінки та канали:**\n\n"
@@ -166,7 +214,6 @@ async def main_handler(message: types.Message):
             parse_mode="Markdown"
         )
 
-    # 9. Текстовий пошук за назвою чи інгредієнтом
     else:
         results = database.search_recipes(text)
         if results:
