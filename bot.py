@@ -77,8 +77,9 @@ def get_cancel_keyboard():
 def get_social_keyboard():
     return InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="🔹 Telegram канал", url="https://t.me/gotuy_prosti_recepty")],
-        [InlineKeyboardButton(text="🔹 TikTok", url="https://www.tiktok.com")],
-        [InlineKeyboardButton(text="🔹 Facebook", url="https://www.facebook.com")]
+        [InlineKeyboardButton(text="🔹 TikTok", url="https://www.tiktok.com/@vitaly_is_cooking")],
+        [InlineKeyboardButton(text="🔹 Instagram", url="https://www.instagram.com/vitaly_is_cooking/")],
+        [InlineKeyboardButton(text="🔹 Facebook", url="https://www.facebook.com/GotuyProstiRecepty")]
     ])
 
 
