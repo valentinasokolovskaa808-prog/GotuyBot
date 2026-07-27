@@ -123,21 +123,18 @@ async def process_link(message: types.Message, state: FSMContext):
     
     try:
         if hasattr(db, 'add_recipe'):
-            try:
-                # Пробуємо передати з посиланням
-                db.add_recipe(
-                    user_data['title'],
-                    user_data['ingredients'],
-                    user_data['instructions'],
-                    link
-                )
-            except TypeError:
-                # Якщо БД приймає тільки 3 аргументи
-                db.add_recipe(
-                    user_data['title'],
-                    user_data['ingredients'],
-                    user_data['instructions']
-                )
+            # Передаємо точно ті параметри, які вимагає database.py
+            db.add_recipe(
+                title=user_data['title'],
+                ingredients=user_data['ingredients'],
+                instructions=user_data['instructions'],
+                video_url=link,
+                is_breakfast=0,
+                is_lunch=0,
+                is_dinner=0,
+                is_baking=0,
+                is_desserts=0
+            )
 
         await message.answer(
             f"✅ **Рецепт успішно додано!**\n\n"
@@ -168,8 +165,9 @@ async def search_handler(message: types.Message):
                     text += f"🛒 **Інгредієнти:**\n{recipe['ingredients']}\n\n"
                 if 'instructions' in recipe:
                     text += f"👩‍🍳 **Приготування:**\n{recipe['instructions']}\n"
-                if recipe.get('link'):
-                    text += f"\n🔗 [Дивитися відео]({recipe['link']})"
+                if recipe.get('link') or recipe.get('video_url'):
+                    url = recipe.get('link') or recipe.get('video_url')
+                    text += f"\n🔗 [Дивитися відео]({url})"
 
                 await message.answer(text, parse_mode="Markdown")
         else:
