@@ -28,11 +28,17 @@ def init_db():
     conn.commit()
     conn.close()
 
-def add_recipe(title, ingredients, instructions, video_url, is_breakfast=0, is_lunch=0, is_dinner=0, is_baking=0, is_desserts=0):
-    """Додає новий рецепт у базу даних."""
+def add_recipe(title, ingredients, instructions, video_url, category="baking"):
+    """Додає новий рецепт у базу даних із визначеною категорією."""
     conn = get_connection()
     cursor = conn.cursor()
     
+    is_breakfast = 1 if category == "breakfast" else 0
+    is_lunch = 1 if category == "lunch" else 0
+    is_dinner = 1 if category == "dinner" else 0
+    is_baking = 1 if category == "baking" else 0
+    is_desserts = 1 if category == "desserts" else 0
+
     cursor.execute('''
         INSERT INTO recipes (title, ingredients, instructions, video_url, is_breakfast, is_lunch, is_dinner, is_baking, is_desserts)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -90,7 +96,7 @@ def get_video_recipes():
     return recipes
 
 def search_recipes(query):
-    """Шукає рецепти за допомогою Python (100% працює з кирилицею та українськими літерами)."""
+    """Шукає рецепти за допомогою Python (100% працює з кирилицею)."""
     conn = get_connection()
     cursor = conn.cursor()
     
@@ -105,7 +111,6 @@ def search_recipes(query):
         title = recipe[0] or ""
         ingredients = recipe[1] or ""
         
-        # Перевіряємо входження слова у назву або інгредієнти
         if search_query in title.lower() or search_query in ingredients.lower():
             matched_recipes.append(recipe)
             
