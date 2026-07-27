@@ -43,7 +43,6 @@ def run_dummy_server():
 
 # --- Клавіатури ---
 def get_main_reply_keyboard():
-    """Нижня текстова клавіатура"""
     return ReplyKeyboardMarkup(
         keyboard=[
             [KeyboardButton(text="🍳 Сніданок"), KeyboardButton(text="🥦 Обід"), KeyboardButton(text="🥦 Вечеря")],
@@ -63,21 +62,37 @@ def get_social_keyboard():
     ])
 
 
-def format_recipe_list(recipes, title):
+# --- Відправка картки кожного рецепта окремо ---
+
+async def send_recipe_cards(message: types.Message, recipes: list, category_title: str = None):
     if not recipes:
-        return f"У категорії **{title}** поки немає рецептів."
+        await message.answer(f"У категорії **{category_title}** поки немає рецептів 😔", parse_mode="Markdown")
+        return
 
-    text = f"📋 **Категорія: {title}** ({len(recipes)})\n\n"
+    if category_title:
+        await message.answer(f"📋 **Знайдено рецепти ({len(recipes)}):**", parse_mode="Markdown")
+
+    # Виводимо рецепти по черзі
     for r in recipes:
-        recipe_title, ingredients, instructions, video_url = r
-        text += f"🔹 **{recipe_title}**\n"
+        title, ingredients, instructions, video_url = r
+        
+        text = f"🍳 **{title}**\n\n"
+        
+        if ingredients and ingredients != "Рецепт та деталі у відео":
+            text += f"🛒 **Інгредієнти:**\n{ingredients}\n\n"
+            
+        if instructions and instructions != "Дивіться відеорецепт у каналі":
+            text += f"👩‍🍳 **Приготування:**\n{instructions}\n\n"
+            
         if video_url:
-            text += f"🔗 [Дивитися відеорецепт]({video_url})\n"
-        text += "───────────────\n"
-    return text
+            text += f"🔗 [Дивитися відеорецепт]({video_url})"
+
+        # disable_web_page_preview=False повертає прев'ю/картинку з посилання Telegram
+        await message.answer(text, parse_mode="Markdown", disable_web_page_preview=False)
+        await asyncio.sleep(0.3)  # Невелика пауза, щоб Telegram гарно виводив картки послідовно
 
 
-# --- Обробники команд ---
+# --- Обробник команд ---
 
 @dp.message(Command("start"))
 async def start_cmd(message: types.Message):
@@ -91,7 +106,7 @@ async def start_cmd(message: types.Message):
     )
 
 
-# --- Обробник усіх текстових повідомлень та кнопок ---
+# --- Обробник повідомлень ---
 
 @dp.message()
 async def main_handler(message: types.Message):
@@ -104,38 +119,32 @@ async def main_handler(message: types.Message):
     # 1. Сніданок
     if "сніданок" in text_lower:
         recipes = database.get_breakfast_recipes()
-        msg_text = format_recipe_list(recipes, "Сніданки")
-        await message.answer(msg_text, parse_mode="Markdown", disable_web_page_preview=True)
+        await send_recipe_cards(message, recipes, "Сніданки")
 
     # 2. Обід
     elif "обід" in text_lower:
         recipes = database.get_lunch_recipes()
-        msg_text = format_recipe_list(recipes, "Обіди")
-        await message.answer(msg_text, parse_mode="Markdown", disable_web_page_preview=True)
+        await send_recipe_cards(message, recipes, "Обіди")
 
     # 3. Вечеря
     elif "вечеря" in text_lower:
         recipes = database.get_dinner_recipes()
-        msg_text = format_recipe_list(recipes, "Вечері")
-        await message.answer(msg_text, parse_mode="Markdown", disable_web_page_preview=True)
+        await send_recipe_cards(message, recipes, "Вечері")
 
     # 4. Випічка
     elif "випічка" in text_lower:
         recipes = database.get_baking_recipes()
-        msg_text = format_recipe_list(recipes, "Випічка")
-        await message.answer(msg_text, parse_mode="Markdown", disable_web_page_preview=True)
+        await send_recipe_cards(message, recipes, "Випічка")
 
     # 5. Десерти
     elif "десерт" in text_lower:
         recipes = database.get_dessert_recipes()
-        msg_text = format_recipe_list(recipes, "Десерти")
-        await message.answer(msg_text, parse_mode="Markdown", disable_web_page_preview=True)
+        await send_recipe_cards(message, recipes, "Десерти")
 
     # 6. Відеорецепти
     elif "відеорецепти" in text_lower or "відео" in text_lower:
         recipes = database.get_video_recipes()
-        msg_text = format_recipe_list(recipes, "Відеорецепти")
-        await message.answer(msg_text, parse_mode="Markdown", disable_web_page_preview=True)
+        await send_recipe_cards(message, recipes, "Відеорецепти")
 
     # 7. Як шукати / Пошук рецепту
     elif "пошук рецепту" in text_lower or "як шукати" in text_lower:
@@ -161,14 +170,7 @@ async def main_handler(message: types.Message):
     else:
         results = database.search_recipes(text)
         if results:
-            msg_text = f"🔎 **Результати пошуку за запитом «{text}» ({len(results)}):**\n\n"
-            for r in results:
-                recipe_title, ingredients, instructions, video_url = r
-                msg_text += f"🔹 **{recipe_title}**\n"
-                if video_url:
-                    msg_text += f"🔗 [Дивитися відеорецепт]({video_url})\n"
-                msg_text += "───────────────\n"
-            await message.answer(msg_text, parse_mode="Markdown", disable_web_page_preview=True)
+            await send_recipe_cards(message, results)
         else:
             await message.answer(
                 f"За запитом **«{text}»** нічого не знайдено 😔\n\n"
