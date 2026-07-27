@@ -5,12 +5,10 @@ from http.server import HTTPServer, BaseHTTPRequestHandler
 from threading import Thread
 from aiogram import Bot, Dispatcher, F, types
 from aiogram.filters import Command
-from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, ReplyKeyboardMarkup, KeyboardButton
 
-# Налаштування логування
 logging.basicConfig(level=logging.INFO)
 
-# Отримання токена з змінних середовища Render
 TOKEN = os.getenv("BOT_TOKEN")
 if not TOKEN:
     raise ValueError("Помилка: BOT_TOKEN не знайдено в змінних оточення!")
@@ -18,10 +16,7 @@ if not TOKEN:
 bot = Bot(token=TOKEN)
 dp = Dispatcher()
 
-# Імпорт функцій бази даних
 import database
-
-# Ініціалізація бази даних при запуску
 database.init_db()
 
 
@@ -38,9 +33,7 @@ class DummyServer(BaseHTTPRequestHandler):
         self.end_headers()
 
     def log_message(self, format, *args):
-        # Приглушуємо стандартні логи HTTP-сервера, щоб не засмічувати консоль
         return
-
 
 def run_dummy_server():
     port = int(os.environ.get("PORT", 10000))
@@ -49,78 +42,32 @@ def run_dummy_server():
 
 
 # --- Клавіатури ---
-def get_main_keyboard():
-    keyboard = InlineKeyboardMarkup(
-        inline_keyboard=[
-            [
-                InlineKeyboardButton(
-                    text="🍳 Сніданки", callback_data="cat_breakfast"
-                ),
-                InlineKeyboardButton(text="🍲 Обіди", callback_data="cat_lunch"),
-            ],
-            [
-                InlineKeyboardButton(
-                    text="🥗 Вечері", callback_data="cat_dinner"
-                ),
-                InlineKeyboardButton(
-                    text="🥐 Випічка", callback_data="cat_baking"
-                ),
-            ],
-            [
-                InlineKeyboardButton(
-                    text="🍰 Десерти", callback_data="cat_desserts"
-                ),
-                InlineKeyboardButton(
-                    text="🎥 Відео-рецепти", callback_data="cat_video"
-                ),
-            ],
-            [
-                InlineKeyboardButton(
-                    text="🔍 Як шукати?", callback_data="how_to_search"
-                )
-            ],
-        ]
-    )
-    return keyboard
-
-
-# --- Обробники команд та повідомлень ---
-
-
-@dp.message(Command("start"))
-async def start_cmd(message: types.Message):
-    welcome_text = (
-        f"Привіт, {message.from_user.first_name}! 👋\n\n"
-        f"Ласкаво просимо до бота каналу **«Готуй! Прості рецепти»**! 🍳\n\n"
-        f"Тут ви можете знайти смачні рецепти за категоріями або скористатися пошуком.\n"
-        f"Просто напишіть назву страви або інгредієнт (наприклад: *сир*, *котлети*, *салат*), і я знайду відповідні рецепти!"
-    )
-    await message.answer(
-        welcome_text, parse_mode="Markdown", reply_markup=get_main_keyboard()
+def get_main_reply_keyboard():
+    """Нижня текстова клавіатура"""
+    return ReplyKeyboardMarkup(
+        keyboard=[
+            [KeyboardButton(text="🍳 Сніданок"), KeyboardButton(text="🥦 Обід"), KeyboardButton(text="🥦 Вечеря")],
+            [KeyboardButton(text="🥐 Випічка"), KeyboardButton(text="🍰 Десерти")],
+            [KeyboardButton(text="🎬 Відеорецепти"), KeyboardButton(text="🔎 Пошук рецепту")],
+            [KeyboardButton(text="📲 Наші соцмережі")]
+        ],
+        resize_keyboard=True
     )
 
-
-@dp.callback_query(F.data == "how_to_search")
-async def process_how_to_search(callback: types.CallbackQuery):
-    await callback.answer()
-    info_text = (
-        "💡 **Як користуватися пошуком:**\n\n"
-        "Надішліть у чат будь-яке слово або назву страви:\n"
-        "• `пиріг` — знайде всі пироги\n"
-        "• `куряче` — знайде страви з куркою\n"
-        "• `салат` — знайде відповідні салати\n\n"
-        "Або обирайте потрібну категорію з меню нижче!"
-    )
-    await callback.message.answer(
-        info_text, parse_mode="Markdown", reply_markup=get_main_keyboard()
-    )
+def get_social_keyboard():
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="🔹 Telegram канал", url="https://t.me/gotuy_prosti_recepty")],
+        [InlineKeyboardButton(text="🔹 TikTok", url="https://www.tiktok.com/@vitaly_is_cooking")],
+        [InlineKeyboardButton(text="🔹 Instagram", url="https://www.instagram.com/vitaly_is_cooking/")],
+        [InlineKeyboardButton(text="🔹 Facebook", url="https://www.facebook.com/GotuyProstiRecepty")]
+    ])
 
 
 def format_recipe_list(recipes, title):
     if not recipes:
         return f"У категорії **{title}** поки немає рецептів."
 
-    text = f"📋 **Категорія: {title}**\n\n"
+    text = f"📋 **Категорія: {title}** ({len(recipes)})\n\n"
     for r in recipes:
         recipe_title, ingredients, instructions, video_url = r
         text += f"🔹 **{recipe_title}**\n"
@@ -130,95 +77,113 @@ def format_recipe_list(recipes, title):
     return text
 
 
-@dp.callback_query(F.data.startswith("cat_"))
-async def process_category(callback: types.CallbackQuery):
-    await callback.answer()
-    cat = callback.data.split("_")[1]
+# --- Обробники команд ---
 
-    if cat == "breakfast":
-        recipes = database.get_breakfast_recipes()
-        title = "Сніданки"
-    elif cat == "lunch":
-        recipes = database.get_lunch_recipes()
-        title = "Обіди"
-    elif cat == "dinner":
-        recipes = database.get_dinner_recipes()
-        title = "Вечері"
-    elif cat == "baking":
-        recipes = database.get_baking_recipes()
-        title = "Випічка"
-    elif cat == "desserts":
-        recipes = database.get_dessert_recipes()
-        title = "Десерти"
-    elif cat == "video":
-        recipes = database.get_video_recipes()
-        title = "Відео-рецепти"
-    else:
-        recipes = []
-        title = "Невідома категорія"
+@dp.message(Command("start"))
+async def start_cmd(message: types.Message):
+    welcome_text = (
+        f"Привіт, {message.from_user.first_name}! 👋\n\n"
+        f"Ласкаво просимо до бота каналу **«Готуй! Прості рецепти»**! 🍳\n\n"
+        f"Обирайте категорію в меню нижче або просто напишіть назву страви для пошуку:"
+    )
+    await message.answer(
+        welcome_text, parse_mode="Markdown", reply_markup=get_main_reply_keyboard()
+    )
 
-    text = format_recipe_list(recipes, title)
 
-    # Якщо текст занадто довгий для одного повідомлення, розбиваємо його
-    if len(text) > 4000:
-        for i in range(0, len(text), 4000):
-            await callback.message.answer(
-                text[i : i + 4000],
-                parse_mode="Markdown",
-                disable_web_page_preview=True,
-            )
-    else:
-        await callback.message.answer(
-            text, parse_mode="Markdown", disable_web_page_preview=True
-        )
-
+# --- Обробник усіх текстових повідомлень та кнопок ---
 
 @dp.message()
-async def search_handler(message: types.Message):
-    query = message.text
-    if not query:
+async def main_handler(message: types.Message):
+    text = message.text.strip() if message.text else ""
+    if not text or text.startswith("/"):
         return
 
-    results = database.search_recipes(query)
+    text_lower = text.lower()
 
-    if not results:
+    # 1. Сніданок
+    if "сніданок" in text_lower:
+        recipes = database.get_breakfast_recipes()
+        msg_text = format_recipe_list(recipes, "Сніданки")
+        await message.answer(msg_text, parse_mode="Markdown", disable_web_page_preview=True)
+
+    # 2. Обід
+    elif "обід" in text_lower:
+        recipes = database.get_lunch_recipes()
+        msg_text = format_recipe_list(recipes, "Обіди")
+        await message.answer(msg_text, parse_mode="Markdown", disable_web_page_preview=True)
+
+    # 3. Вечеря
+    elif "вечеря" in text_lower:
+        recipes = database.get_dinner_recipes()
+        msg_text = format_recipe_list(recipes, "Вечері")
+        await message.answer(msg_text, parse_mode="Markdown", disable_web_page_preview=True)
+
+    # 4. Випічка
+    elif "випічка" in text_lower:
+        recipes = database.get_baking_recipes()
+        msg_text = format_recipe_list(recipes, "Випічка")
+        await message.answer(msg_text, parse_mode="Markdown", disable_web_page_preview=True)
+
+    # 5. Десерти
+    elif "десерт" in text_lower:
+        recipes = database.get_dessert_recipes()
+        msg_text = format_recipe_list(recipes, "Десерти")
+        await message.answer(msg_text, parse_mode="Markdown", disable_web_page_preview=True)
+
+    # 6. Відеорецепти
+    elif "відеорецепти" in text_lower or "відео" in text_lower:
+        recipes = database.get_video_recipes()
+        msg_text = format_recipe_list(recipes, "Відеорецепти")
+        await message.answer(msg_text, parse_mode="Markdown", disable_web_page_preview=True)
+
+    # 7. Як шукати / Пошук рецепту
+    elif "пошук рецепту" in text_lower or "як шукати" in text_lower:
         await message.answer(
-            f"🔍 За запитом *«{query}»* нічого не знайдено.\nСпробуйте ввести інше слово або скористайтеся категоріями нижче.",
-            parse_mode="Markdown",
-            reply_markup=get_main_keyboard(),
+            "💡 **Як користуватися пошуком:**\n\n"
+            "Просто напишіть у чат назву страви або інгредієнт:\n"
+            "• `курка` — знайде страви з куркою\n"
+            "• `салат` — знайде відповідні салати\n"
+            "• `торт` — знайде торти та десерти",
+            parse_mode="Markdown"
         )
-        return
 
-    text = f"🔎 **Результати пошуку за запитом «{query}» ({len(results)}):**\n\n"
-    for r in results:
-        recipe_title, ingredients, instructions, video_url = r
-        text += f"🔹 **{recipe_title}**\n"
-        if video_url:
-            text += f"🔗 [Дивитися відеорецепт]({video_url})\n"
-        text += "───────────────\n"
+    # 8. Наші соцмережі
+    elif "соцмережі" in text_lower:
+        await message.answer(
+            "📲 **Наші офіційні сторінки та канали:**\n\n"
+            "Переходьте за посиланнями нижче 👇",
+            reply_markup=get_social_keyboard(),
+            parse_mode="Markdown"
+        )
 
-    if len(text) > 4000:
-        for i in range(0, len(text), 4000):
-            await message.answer(
-                text[i : i + 4000],
-                parse_mode="Markdown",
-                disable_web_page_preview=True,
-            )
+    # 9. Текстовий пошук за назвою чи інгредієнтом
     else:
-        await message.answer(
-            text, parse_mode="Markdown", disable_web_page_preview=True
-        )
+        results = database.search_recipes(text)
+        if results:
+            msg_text = f"🔎 **Результати пошуку за запитом «{text}» ({len(results)}):**\n\n"
+            for r in results:
+                recipe_title, ingredients, instructions, video_url = r
+                msg_text += f"🔹 **{recipe_title}**\n"
+                if video_url:
+                    msg_text += f"🔗 [Дивитися відеорецепт]({video_url})\n"
+                msg_text += "───────────────\n"
+            await message.answer(msg_text, parse_mode="Markdown", disable_web_page_preview=True)
+        else:
+            await message.answer(
+                f"За запитом **«{text}»** нічого не знайдено 😔\n\n"
+                f"Спробуйте ввести інше слово (наприклад: *салат*, *сир*, *курка*).",
+                parse_mode="Markdown"
+            )
 
 
 # --- Запуск бота ---
 async def main():
-    # Запускаємо веб-сервер у фоновому потоці для Render
     server_thread = Thread(target=run_dummy_server, daemon=True)
     server_thread.start()
 
     logging.info("БОТ УСПІШНО ЗАПУЩЕНИЙ В РЕЖИМІ POLLING")
     await dp.start_polling(bot)
-
 
 if __name__ == "__main__":
     asyncio.run(main())
