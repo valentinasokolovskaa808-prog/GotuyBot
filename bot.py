@@ -45,6 +45,7 @@ dp = Dispatcher(storage=MemoryStorage())
 # --- FSM (Стани додавання рецепту) ---
 class AddRecipeFSM(StatesGroup):
     title = State()
+    category = State()
     ingredients = State()
     instructions = State()
     link = State()
@@ -67,6 +68,14 @@ def get_admin_keyboard():
     return InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="➕ Додати рецепт", callback_data="add_recipe")],
         [InlineKeyboardButton(text="📊 Статистика", callback_data="stats")]
+    ])
+
+def get_category_keyboard():
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="🍳 Сніданок", callback_data="cat_breakfast"), InlineKeyboardButton(text="🥗 Обід", callback_data="cat_lunch")],
+        [InlineKeyboardButton(text="🥦 Вечеря", callback_data="cat_dinner"), InlineKeyboardButton(text="🥐 Випічка", callback_data="cat_baking")],
+        [InlineKeyboardButton(text="🍰 Десерти", callback_data="cat_desserts")],
+        [InlineKeyboardButton(text="❌ Скасувати", callback_data="cancel")]
     ])
 
 def get_cancel_keyboard():
@@ -109,7 +118,7 @@ async def start_add_recipe(callback: types.CallbackQuery, state: FSMContext):
         return await callback.answer("Немає доступу.", show_alert=True)
     
     await state.set_state(AddRecipeFSM.title)
-    await callback.message.answer("Крок 1/4: Введіть **назву рецепта**:", reply_markup=get_cancel_keyboard(), parse_mode="Markdown")
+    await callback.message.answer("Крок 1/5: Введіть **назву рецепта**:", reply_markup=get_cancel_keyboard(), parse_mode="Markdown")
     await callback.answer()
 
 @dp.callback_query(F.data == "stats")
@@ -130,20 +139,28 @@ async def cancel_handler(callback: types.CallbackQuery, state: FSMContext):
 @dp.message(AddRecipeFSM.title)
 async def process_title(message: types.Message, state: FSMContext):
     await state.update_data(title=message.text)
+    await state.set_state(AddRecipeFSM.category)
+    await message.answer("Крок 2/5: Оберіть **категорію** рецепта:", reply_markup=get_category_keyboard())
+
+@dp.callback_query(AddRecipeFSM.category, F.data.startswith("cat_"))
+async def process_category(callback: types.CallbackQuery, state: FSMContext):
+    category = callback.data.replace("cat_", "")
+    await state.update_data(category=category)
     await state.set_state(AddRecipeFSM.ingredients)
-    await message.answer("Крок 2/4: Введіть **інгредієнти** (або напишіть *Рецепт та деталі у відео*):", reply_markup=get_cancel_keyboard(), parse_mode="Markdown")
+    await callback.message.answer("Крок 3/5: Введіть **інгредієнти** (або напишіть *Рецепт та деталі у відео*):", reply_markup=get_cancel_keyboard(), parse_mode="Markdown")
+    await callback.answer()
 
 @dp.message(AddRecipeFSM.ingredients)
 async def process_ingredients(message: types.Message, state: FSMContext):
     await state.update_data(ingredients=message.text)
     await state.set_state(AddRecipeFSM.instructions)
-    await message.answer("Крок 3/4: Введіть **інструкцію приготування** (або *Дивіться відеорецепт у каналі*):", reply_markup=get_cancel_keyboard(), parse_mode="Markdown")
+    await message.answer("Крок 4/5: Введіть **інструкцію приготування** (або *Дивіться відеорецепт у каналі*):", reply_markup=get_cancel_keyboard(), parse_mode="Markdown")
 
 @dp.message(AddRecipeFSM.instructions)
 async def process_instructions(message: types.Message, state: FSMContext):
     await state.update_data(instructions=message.text)
     await state.set_state(AddRecipeFSM.link)
-    await message.answer("Крок 4/4: Введіть **посилання на відео в Telegram**:", reply_markup=get_cancel_keyboard(), parse_mode="Markdown")
+    await message.answer("Крок 5/5: Введіть **посилання на відео в Telegram**:", reply_markup=get_cancel_keyboard(), parse_mode="Markdown")
 
 @dp.message(AddRecipeFSM.link)
 async def process_link(message: types.Message, state: FSMContext):
@@ -156,11 +173,7 @@ async def process_link(message: types.Message, state: FSMContext):
             ingredients=user_data['ingredients'],
             instructions=user_data['instructions'],
             video_url=link,
-            is_breakfast=1,
-            is_lunch=1,
-            is_dinner=1,
-            is_baking=1,
-            is_desserts=1
+            category=user_data.get('category', 'baking')
         )
         await message.answer(f"✅ **Рецепт успішно додано!**\n📌 **Назва:** {user_data['title']}", parse_mode="Markdown")
     except Exception as e:
