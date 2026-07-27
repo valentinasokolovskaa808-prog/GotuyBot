@@ -160,28 +160,48 @@ async def search_handler(message: types.Message):
             results = db.search_recipes(query)
             if results:
                 for recipe in results[:5]:
+                    title = "Рецепт"
+                    ingr = ""
+                    instr = ""
+                    url = ""
+
                     if isinstance(recipe, dict):
-                        title = recipe.get('title', 'Рецепт')
+                        title = recipe.get('title') or recipe.get('name') or "Рецепт"
                         ingr = recipe.get('ingredients', '')
                         instr = recipe.get('instructions', '')
                         url = recipe.get('video_url') or recipe.get('link', '')
-                    else:
-                        title = recipe[1] if len(recipe) > 1 else 'Рецепт'
-                        ingr = recipe[2] if len(recipe) > 2 else ''
-                        instr = recipe[3] if len(recipe) > 3 else ''
-                        url = recipe[4] if len(recipe) > 4 else ''
+                    elif isinstance(recipe, (list, tuple)):
+                        if len(recipe) > 1 and recipe[1]:
+                            title = str(recipe[1])
+                        if len(recipe) > 2 and recipe[2]:
+                            ingr = str(recipe[2])
+                        if len(recipe) > 3 and recipe[3]:
+                            instr = str(recipe[3])
+                        if len(recipe) > 4 and recipe[4]:
+                            url = str(recipe[4])
+
+                    # Якщо назва заглушка, пробуємо дістати її з елементів кортежу
+                    if title == "Рецепт та деталі у відео" or title == "Рецепт":
+                        if isinstance(recipe, (list, tuple)):
+                            for item in recipe:
+                                if isinstance(item, str) and item and not item.startswith("http") and item != "Дивіться відеорецепт у каналі":
+                                    title = item
+                                    break
 
                     text = f"🍳 **{title}**\n\n"
                     if ingr:
                         text += f"🛒 **Інгредієнти:**\n{ingr}\n\n"
-                    if instr:
+                    if instr and not instr.startswith("http"):
                         text += f"👩‍🍳 **Приготування:**\n{instr}\n"
+                    elif instr.startswith("http") and not url:
+                        url = instr
+
                     if url and url != "-":
                         text += f"\n🔗 [Дивитися відео]({url})"
 
                     await message.answer(text, parse_mode="Markdown")
             else:
-                await message.answer("Нічого не знайдено 😔 Спробуйте пошукати по-іншому (наприклад, за назвою або інгредієнтом).")
+                await message.answer("Нічого не знайдено 😔 Спробуйте пошукати за іншим словом.")
         except Exception as e:
             logger.error(f"Помилка пошуку: {e}")
             await message.answer(f"❌ Помилка при пошуку: {e}")
