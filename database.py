@@ -90,15 +90,17 @@ def get_video_recipes():
     return recipes
 
 def search_recipes(query):
-    """Шукає рецепти за назвою або інгредієнтами."""
+    """Шукає рецепти за назвою або інгредієнтами незалежно від регістру літер."""
     conn = get_connection()
     cursor = conn.cursor()
-    search_query = f"%{query}%"
+    search_query = f"%{query.strip().lower()}%"
+    
     cursor.execute('''
         SELECT title, ingredients, instructions, video_url 
         FROM recipes 
-        WHERE title LIKE ? OR ingredients LIKE ?
+        WHERE LOWER(title) LIKE ? OR LOWER(ingredients) LIKE ?
     ''', (search_query, search_query))
+    
     recipes = cursor.fetchall()
     conn.close()
     return recipes
