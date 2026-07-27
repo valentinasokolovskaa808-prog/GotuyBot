@@ -74,6 +74,13 @@ def get_cancel_keyboard():
         [InlineKeyboardButton(text="❌ Скасувати", callback_data="cancel")]
     ])
 
+def get_social_keyboard():
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="🔹 Telegram канал", url="https://t.me/gotuy_prosti_recepty")],
+        [InlineKeyboardButton(text="🔹 TikTok", url="https://www.tiktok.com")],
+        [InlineKeyboardButton(text="🔹 Facebook", url="https://www.facebook.com")]
+    ])
+
 
 # --- ОБРОБНИКИ КОМАНД ---
 
@@ -143,7 +150,6 @@ async def process_link(message: types.Message, state: FSMContext):
     user_data = await state.get_data()
     
     try:
-        # Додаємо рецепт у базу (за замовчуванням робимо його доступним у всіх категоріях)
         db.add_recipe(
             title=user_data['title'],
             ingredients=user_data['ingredients'],
@@ -170,7 +176,6 @@ async def send_recipe_list(message: types.Message, recipes_list: list):
         await message.answer("У цій категорії поки немає доданих рецептів 😔")
         return
 
-    # Відправляємо до 5 рецептів за один раз
     for recipe in recipes_list[:5]:
         title = recipe[0]
         ingredients = recipe[1]
@@ -244,11 +249,9 @@ async def main_handler(message: types.Message):
     elif "соцмережі" in text_lower:
         await message.answer(
             "📲 **Наші офіційні сторінки та канали:**\n\n"
-            "🔹 **Telegram:** https://t.me/gotuyprostirecepty\n"
-            "🔹 **TikTok:** шукайте нас під брендом «Готуй! Прості рецепти»\n\n"
-            "Приєднуйтесь та готуйте разом з нами! 🍳",
-            parse_mode="Markdown",
-            disable_web_page_preview=True
+            "Натискайте на кнопки нижче, щоб швидко перейти до потрібної спільноти 👇",
+            reply_markup=get_social_keyboard(),
+            parse_mode="Markdown"
         )
 
     # 9. Текстовий пошук за назвою або інгредієнтом
