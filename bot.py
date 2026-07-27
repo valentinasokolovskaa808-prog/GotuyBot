@@ -53,7 +53,6 @@ class AddRecipeFSM(StatesGroup):
 
 # --- КЛАВІАТУРИ ---
 
-# Текстові кнопки категорій для користувачів
 def get_main_keyboard():
     return ReplyKeyboardMarkup(
         keyboard=[
@@ -82,7 +81,7 @@ def get_cancel_keyboard():
 async def start_handler(message: types.Message):
     await message.answer(
         "Привіт! Я ваш кулінарний бот 🍳\n\n"
-        "Оберіть категорію нижче або просто напишіть назву страви/інгредієнт для пошуку:",
+        "Оберіть категорію нижче або напишіть назву страви для пошуку:",
         reply_markup=get_main_keyboard()
     )
 
@@ -94,7 +93,7 @@ async def admin_handler(message: types.Message):
         await message.answer("У вас немає доступу до цієї команди.")
 
 
-# --- СЦЕНАРІЙ ДОДАВАННЯ РЕЦЕПТУ ТА ІНШІ КНОПКИ ---
+# --- СЦЕНАРІЙ ДОДАВАННЯ РЕЦЕПТУ ТА АДМІН-КНОПКИ ---
 
 @dp.callback_query(F.data == "add_recipe")
 async def start_add_recipe(callback: types.CallbackQuery, state: FSMContext):
@@ -180,25 +179,25 @@ async def process_link(message: types.Message, state: FSMContext):
     await state.clear()
 
 
-# --- КНОПКИ КАТЕГОРІЙ ТА ПОШУК ---
+# --- УНІВЕРСАЛЬНИЙ ОБРОБНИК БУДЬ-ЯКИХ INLINE-КНОПОК (CALLBACK) ---
 
-CATEGORY_CLEAN = {
-    "🌅 Сніданок": "Сніданок",
-    "☀️ Обід": "Обід",
-    "🌙 Вечеря": "Вечеря",
-    "🥐 Випічка": "Випічка",
-    "🍰 Десерти": "Десерт"
-}
+@dp.callback_query()
+async def universal_callback_handler(callback: types.CallbackQuery):
+    data = callback.data
+    logger.info(f"Отримано Callback: {data}")
+    
+    # Якщо це кнопка категорії з інлайн-меню
+    query = data
+    if data.startswith("cat_") or data.startswith("category_"):
+        query = data.split("_", 1)[1]
+    
+    await fetch_and_send_recipes(callback.message, query)
+    await callback.answer()
 
-@dp.message()
-async def search_handler(message: types.Message):
-    raw_text = message.text.strip()
-    if not raw_text or raw_text.startswith("/"):
-        return
 
-    # Перевіряємо, чи це кнопка категорії (прибираємо смайлик)
-    query = CATEGORY_CLEAN.get(raw_text, raw_text)
+# --- ДОПОМІЖНА ФУНКЦІЯ ВІДОБРАЖЕННЯ РЕЦЕПТІВ ---
 
+async def fetch_and_send_recipes(message: types.Message, query: str):
     if hasattr(db, 'search_recipes'):
         try:
             results = db.search_recipes(query)
@@ -244,10 +243,30 @@ async def search_handler(message: types.Message):
 
                     await message.answer(text, parse_mode="Markdown")
             else:
-                await message.answer("Нічого не знайдено 😔 Спробуйте пошукати за іншим словом або категорією.")
+                await message.answer(f"Нічого не знайдено за запитом **{query}** 😔")
         except Exception as e:
             logger.error(f"Помилка пошуку: {e}")
             await message.answer(f"❌ Помилка при пошуку: {e}")
+
+
+# --- ОБРОБНИК ТЕКСТОВИХ ПОВІДОМЛЕНЬ ТА НИЖНІХ КНОПОК ---
+
+CATEGORY_CLEAN = {
+    "🌅 Сніданок": "Сніданок",
+    "☀️ Обід": "Обід",
+    "🌙 Вечеря": "Вечеря",
+    "🥐 Випічка": "Випічка",
+    "🍰 Десерти": "Десерт"
+}
+
+@dp.message()
+async def search_handler(message: types.Message):
+    raw_text = message.text.strip()
+    if not raw_text or raw_text.startswith("/"):
+        return
+
+    query = CATEGORY_CLEAN.get(raw_text, raw_text)
+    await fetch_and_send_recipes(message, query)
 
 
 # --- ГОЛОВНА ФУНКЦІЯ ---
@@ -257,7 +276,7 @@ async def main():
         db.init_db()
 
     await bot.delete_webhook(drop_pending_updates=True)
-    logger.info("БОТ З АДМІН-ПАНЕЛЛЮ УСПІШНО ЗАПУЩЕНИЙ")
+    logger.info("БОТ УСПІШНО ЗАПУЩЕНИЙ")
     await dp.start_polling(bot)
 
 if __name__ == "__main__":
