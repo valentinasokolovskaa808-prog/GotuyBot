@@ -1,6 +1,6 @@
 import sqlite3
 
-# Початкові рецепти (5 полів: title, ingredients, description, link)
+# Початкові рецепти (4 поля під ваш bot.py)
 INITIAL_RECIPES = [
     (
         "Борщ український",
@@ -33,7 +33,7 @@ def get_connection():
     return sqlite3.connect("recipes.db")
 
 def init_db():
-    """Створення та первинне наповнення бази даних (5 колонок)."""
+    """Створення та первинне наповнення бази даних."""
     conn = get_connection()
     cursor = conn.cursor()
 
@@ -61,9 +61,9 @@ def init_db():
 
 def search_recipes(query: str):
     """
-    Пошук рецептів по 5 колонках:
-    - Прибирає '#' з запиту та з бази
-    - Шукає за коренем слова (відрізає останню літеру для слів від 4 символів)
+    Пошук рецептів (повертає точно 4 значення для bot.py: title, ingredients, description, link):
+    - Ігнорує '#'
+    - Враховує відмінки (відрізає остання літеру для слів від 4 символів)
     """
     if not query:
         return []
@@ -81,9 +81,9 @@ def search_recipes(query: str):
     conn = get_connection()
     cursor = conn.cursor()
 
-    # Шукаємо у назві, інгредієнтах та описі
+    # Повертаємо 4 поля, як очікує bot.py у рядку 121
     sql_query = """
-        SELECT id, title, ingredients, description, link FROM recipes 
+        SELECT title, ingredients, description, link FROM recipes 
         WHERE LOWER(REPLACE(title, '#', '')) LIKE ? 
            OR LOWER(REPLACE(ingredients, '#', '')) LIKE ?
            OR LOWER(REPLACE(description, '#', '')) LIKE ?
@@ -118,7 +118,7 @@ def get_video_recipes():
     return search_recipes("відео")
 
 def add_recipe(title: str, ingredients: str, description: str, link: str = ""):
-    """Додавання нового рецепта з 5 полями."""
+    """Додавання нового рецепта."""
     conn = get_connection()
     cursor = conn.cursor()
     cursor.execute(
@@ -129,10 +129,10 @@ def add_recipe(title: str, ingredients: str, description: str, link: str = ""):
     conn.close()
 
 def get_all_recipes():
-    """Отримання всіх рецептів з бази."""
+    """Отримання всіх рецептів (4 поля)."""
     conn = get_connection()
     cursor = conn.cursor()
-    cursor.execute("SELECT id, title, ingredients, description, link FROM recipes")
+    cursor.execute("SELECT title, ingredients, description, link FROM recipes")
     results = cursor.fetchall()
     conn.close()
     return results
