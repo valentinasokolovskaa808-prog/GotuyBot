@@ -1,138 +1,190 @@
 import sqlite3
 
-# Початкові рецепти (4 поля під ваш bot.py)
-INITIAL_RECIPES = [
-    (
-        "Борщ український",
-        "Яловичина, буряк, капуста, картопля, квасоля",
-        "Класичний червоний борщ з яловичиною. #обід #перші_страви",
-        "https://t.me/gotuy_prosti_recepty"
-    ),
-    (
-        "Салат Цезар",
-        "Куряче філе, салат айсберг, сухарики, соус цезар",
-        "Легкий салат з куркою. #обід #салат #вечеря",
-        "https://t.me/gotuy_prosti_recepty"
-    ),
-    (
-        "Піца з ковбасою",
-        "Тісто, ковбаса, моцарела, томатний соус",
-        "Домашня піца на тонкому тісті. #випічка #піца",
-        "https://t.me/gotuy_prosti_recepty"
-    ),
-    (
-        "Сирники",
-        "Домашній сир, яйця, борошно, цукор",
-        "Ніжні та пишні сирники до сніданку. #сніданок #десерти",
-        "https://t.me/gotuy_prosti_recepty"
-    )
-]
+DATABASE_NAME = "recipes.db"
 
 def get_connection():
-    """Підключення до бази даних SQLite."""
-    return sqlite3.connect("recipes.db")
+    return sqlite3.connect(DATABASE_NAME)
 
 def init_db():
-    """Створення та первинне наповнення бази даних."""
+    """Створює таблицю рецептів та заповнює/поновлює її повним списком рецептів."""
     conn = get_connection()
     cursor = conn.cursor()
-
-    cursor.execute("""
+    
+    cursor.execute('''
         CREATE TABLE IF NOT EXISTS recipes (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             title TEXT NOT NULL,
-            ingredients TEXT DEFAULT '',
-            description TEXT NOT NULL,
-            link TEXT DEFAULT ''
+            ingredients TEXT NOT NULL,
+            instructions TEXT NOT NULL,
+            video_url TEXT,
+            is_breakfast INTEGER DEFAULT 0,
+            is_lunch INTEGER DEFAULT 0,
+            is_dinner INTEGER DEFAULT 0,
+            is_baking INTEGER DEFAULT 0,
+            is_desserts INTEGER DEFAULT 0
         )
-    """)
-
+    ''')
+    
+    # Перевіряємо, скільки зараз рецептів у базі
     cursor.execute("SELECT COUNT(*) FROM recipes")
     count = cursor.fetchone()[0]
+    
+    sample_recipes = [
+        ("Соковиті січені рибні котлети", "Рецепт та деталі у відео", "Дивіться відеорецепт у каналі", "https://t.me/gotuy_prosti_recepty/2007", 0, 1, 1, 0, 0),
+        ("Трубочки із сиром", "Рецепт та деталі у відео", "Дивіться відеорецепт у каналі", "https://t.me/gotuy_prosti_recepty/2006", 1, 0, 0, 1, 0),
+        ("Вергуни", "Рецепт та деталі у відео", "Дивіться відеорецепт у каналі", "https://t.me/gotuy_prosti_recepty/2005", 0, 0, 0, 1, 1),
+        ("Пікантні мариновані помідори", "Рецепт та деталі у відео", "Дивіться відеорецепт у каналі", "https://t.me/gotuy_prosti_recepty/2004", 0, 1, 1, 0, 0),
+        ("Швидкі коржі", "Рецепт та деталі у відео", "Дивіться відеорецепт у каналі", "https://t.me/gotuy_prosti_recepty/2003", 1, 0, 0, 1, 0),
+        ("Хрусткий мигдаль у меді та кунжуті", "Рецепт та деталі у відео", "Дивіться відеорецепт у каналі", "https://t.me/gotuy_prosti_recepty/2002", 0, 0, 0, 0, 1),
+        ("Індичка з овочами в горщиках", "Рецепт та деталі у відео", "Дивіться відеорецепт у каналі", "https://t.me/gotuy_prosti_recepty/2001", 0, 1, 1, 0, 0),
+        ("Салат із крабовими паличками, сиром та помідорами", "Рецепт та деталі у відео", "Дивіться відеорецепт у каналі", "https://t.me/gotuy_prosti_recepty/2000", 0, 1, 1, 0, 0),
+        ("Маковий лимонний торт", "Рецепт та деталі у відео", "Дивіться відеорецепт у каналі", "https://t.me/gotuy_prosti_recepty/1999", 0, 0, 0, 1, 1),
+        ("Дуууууже смачні курячі котлети", "Рецепт та деталі у відео", "Дивіться відеорецепт у каналі", "https://t.me/gotuy_prosti_recepty/1998", 0, 1, 1, 0, 0),
+        ("Салат «Буніто»", "Рецепт та деталі у відео", "Дивіться відеорецепт у каналі", "https://t.me/gotuy_prosti_recepty/1997", 0, 1, 1, 0, 0),
+        ("Кекси з бананом та яблуком", "Рецепт та деталі у відео", "Дивіться відеорецепт у каналі", "https://t.me/gotuy_prosti_recepty/1996", 1, 0, 0, 1, 1),
+        ("Картопляні кульки з сиром", "Рецепт та деталі у відео", "Дивіться відеорецепт у каналі", "https://t.me/gotuy_prosti_recepty/1995", 0, 1, 1, 0, 0),
+        ("Дієтична куряча ковбаса з грибами", "Рецепт та деталі у відео", "Дивіться відеорецепт у каналі", "https://t.me/gotuy_prosti_recepty/1994", 0, 1, 1, 0, 0),
+        ("Ситний сніданок або перекус", "Рецепт та деталі у відео", "Дивіться відеорецепт у каналі", "https://t.me/gotuy_prosti_recepty/1993", 1, 0, 0, 0, 0),
+        ("Запечені овочі з картоплею та мʼясом", "Рецепт та деталі у відео", "Дивіться відеорецепт у каналі", "https://t.me/gotuy_prosti_recepty/1992", 0, 1, 1, 0, 0),
+        ("Домашня пахлава", "Рецепт та деталі у відео", "Дивіться відеорецепт у каналі", "https://t.me/gotuy_prosti_recepty/1991", 0, 0, 0, 1, 1),
+        ("Домашній сир", "Рецепт та деталі у відео", "Дивіться відеорецепт у каналі", "https://t.me/gotuy_prosti_recepty/1990", 1, 0, 0, 0, 0),
+        ("Трендовий закритий бургер", "Рецепт та деталі у відео", "Дивіться відеорецепт у каналі", "https://t.me/gotuy_prosti_recepty/1989", 0, 1, 1, 0, 0),
+        ("Пиріжки з картоплею та сосискою", "Рецепт та деталі у відео", "Дивіться відеорецепт у каналі", "https://t.me/gotuy_prosti_recepty/1988", 1, 1, 0, 1, 0),
+        ("Повітряний бісквіт до чаю", "Рецепт та деталі у відео", "Дивіться відеорецепт у каналі", "https://t.me/gotuy_prosti_recepty/1987", 0, 0, 0, 1, 1),
+        ("Салат із консервованим горошком", "Рецепт та деталі у відео", "Дивіться відеорецепт у каналі", "https://t.me/gotuy_prosti_recepty/1986", 0, 1, 1, 0, 0),
+        ("Млинці в «горошок»", "Рецепт та деталі у відео", "Дивіться відеорецепт у каналі", "https://t.me/gotuy_prosti_recepty/1985", 1, 0, 0, 1, 1),
+        ("Оселедцевий паштет", "Рецепт та деталі у відео", "Дивіться відеорецепт у каналі", "https://t.me/gotuy_prosti_recepty/1984", 1, 1, 0, 0, 0),
+        ("Соковите м'ясо по-французьки", "Рецепт та деталі у відео", "Дивіться відеорецепт у каналі", "https://t.me/gotuy_prosti_recepty/1983", 0, 1, 1, 0, 0),
+        ("Хліб Фокачча", "Рецепт та деталі у відео", "Дивіться відеорецепт у каналі", "https://t.me/gotuy_prosti_recepty/1982", 0, 0, 0, 1, 0),
+        ("Рулет з варенням", "Рецепт та деталі у відео", "Дивіться відеорецепт у каналі", "https://t.me/gotuy_prosti_recepty/1981", 0, 0, 0, 1, 1),
+        ("Густий капусняк з ребрами", "Рецепт та деталі у відео", "Дивіться відеорецепт у каналі", "https://t.me/gotuy_prosti_recepty/1980", 0, 1, 1, 0, 0),
+        ("Вівсяний домашній кекс", "Рецепт та деталі у відео", "Дивіться відеорецепт у каналі", "https://t.me/gotuy_prosti_recepty/1979", 1, 0, 0, 1, 1),
+        ("Найсмачніший банановий млинець на сніданок", "Рецепт та деталі у відео", "Дивіться відеорецепт у каналі", "https://t.me/gotuy_prosti_recepty/1978", 1, 0, 0, 0, 1),
+        ("Смачна ідея для бургерів", "Рецепт та деталі у відео", "Дивіться відеорецепт у каналі", "https://t.me/gotuy_prosti_recepty/1977", 0, 1, 1, 0, 0),
+        ("Найпростіший Квас", "Рецепт та деталі у відео", "Дивіться відеорецепт у каналі", "https://t.me/gotuy_prosti_recepty/1976", 0, 0, 0, 0, 1),
+        ("Кекси до чаю", "Рецепт та деталі у відео", "Дивіться відеорецепт у каналі", "https://t.me/gotuy_prosti_recepty/1975", 0, 0, 0, 1, 1),
+        ("Курка з овочами в соусі", "Рецепт та деталі у відео", "Дивіться відеорецепт у каналі", "https://t.me/gotuy_prosti_recepty/1974", 0, 1, 1, 0, 0),
+        ("Пиріг із плавленими сирками та цибулею", "Рецепт та деталі у відео", "Дивіться відеорецепт у каналі", "https://t.me/gotuy_prosti_recepty/1973", 0, 1, 1, 1, 0),
+        ("Човники з листкового тіста", "Рецепт та деталі у відео", "Дивіться відеорецепт у каналі", "https://t.me/gotuy_prosti_recepty/1972", 1, 1, 1, 1, 0),
+        ("Закусковий перчик", "Рецепт та деталі у відео", "Дивіться відеорецепт у каналі", "https://t.me/gotuy_prosti_recepty/1971", 0, 1, 1, 0, 0),
+        ("М'ясний пиріг із картоплею", "Рецепт та деталі у відео", "Дивіться відеорецепт у каналі", "https://t.me/gotuy_prosti_recepty/1970", 0, 1, 1, 1, 0),
+        ("Салат із тунцем", "Рецепт та деталі у відео", "Дивіться відеорецепт у каналі", "https://t.me/gotuy_prosti_recepty/1969", 0, 1, 1, 0, 0),
+        ("Сальтисон. Дуже смачний рецепт", "Рецепт та деталі у відео", "Дивіться відеорецепт у каналі", "https://t.me/gotuy_prosti_recepty/1968", 0, 1, 1, 0, 0),
+        ("Святковий салат", "Рецепт та деталі у відео", "Дивіться відеорецепт у каналі", "https://t.me/gotuy_prosti_recepty/1966", 0, 1, 1, 0, 0),
+        ("Торт «Пеньок»", "Рецепт та деталі у відео", "Дивіться відеорецепт у каналі", "https://t.me/gotuy_prosti_recepty/1965", 0, 0, 0, 1, 1),
+        ("Запечена курка з овочами та сиром", "Рецепт та деталі у відео", "Дивіться відеорецепт у каналі", "https://t.me/gotuy_prosti_recepty/1964", 0, 1, 1, 0, 0),
+        ("Закуска з перців", "Рецепт та деталі у відео", "Дивіться відеорецепт у каналі", "https://t.me/gotuy_prosti_recepty/1963", 0, 1, 1, 0, 0),
+        ("Неззвичайні деруни", "Рецепт та деталі у відео", "Дивіться відеорецепт у каналі", "https://t.me/gotuy_prosti_recepty/1962", 1, 1, 1, 0, 0),
+        ("Оладки", "Рецепт та деталі у відео", "Дивіться відеорецепт у каналі", "https://t.me/gotuy_prosti_recepty/1961", 1, 0, 0, 1, 0),
+        ("Найпростіше печиво «Хвилинка»", "Рецепт та деталі у відео", "Дивіться відеорецепт у каналі", "https://t.me/gotuy_prosti_recepty/1960", 0, 0, 0, 1, 1),
+        ("Домашня буженина з курячого філе", "Рецепт та деталі у відео", "Дивіться відеорецепт у каналі", "https://t.me/gotuy_prosti_recepty/1959", 0, 1, 1, 0, 0),
+        ("Пiцa з кабачка", "Рецепт та деталі у відео", "Дивіться відеорецепт у каналі", "https://t.me/gotuy_prosti_recepty/1958", 1, 1, 1, 0, 0),
+        ("Салат з копченим сиром", "Рецепт та деталі у відео", "Дивіться відеорецепт у каналі", "https://t.me/gotuy_prosti_recepty/1957", 0, 1, 1, 0, 0),
+        ("Свинина під шубою", "Рецепт та деталі у відео", "Дивіться відеорецепт у каналі", "https://t.me/gotuy_prosti_recepty/1956", 0, 1, 1, 0, 0),
+        ("Медове печиво", "Рецепт та деталі у відео", "Дивіться відеорецепт у каналі", "https://t.me/gotuy_prosti_recepty/1955", 0, 0, 0, 1, 1),
+        ("Сніданок у стилі мексиканської кесадільї", "Рецепт та деталі у відео", "Дивіться відеорецепт у каналі", "https://t.me/gotuy_prosti_recepty/1954", 1, 0, 0, 0, 0),
+        ("Салат з курячою печінкою та корейською морквою", "Рецепт та деталі у відео", "Дивіться відеорецепт у каналі", "https://t.me/gotuy_prosti_recepty/1953", 0, 1, 1, 0, 0),
+        ("Шоколадний торт або торт «три склянки»", "Рецепт та деталі у відео", "Дивіться відеорецепт у каналі", "https://t.me/gotuy_prosti_recepty/1952", 0, 0, 0, 1, 1),
+        ("Фінський млинець", "Рецепт та деталі у відео", "Дивіться відеорецепт у каналі", "https://t.me/gotuy_prosti_recepty/1951", 1, 0, 0, 1, 0),
+        ("Оселедець «Закусковий»", "Рецепт та деталі у відео", "Дивіться відеорецепт у каналі", "https://t.me/gotuy_prosti_recepty/1950", 0, 1, 1, 0, 0),
+        ("Смачний, ніжний курячий шніцель", "Рецепт та деталі у відео", "Дивіться відеорецепт у каналі", "https://t.me/gotuy_prosti_recepty/1949", 0, 1, 1, 0, 0)
+    ]
 
-    if count == 0:
-        cursor.executemany(
-            "INSERT INTO recipes (title, ingredients, description, link) VALUES (?, ?, ?, ?)",
-            INITIAL_RECIPES
-        )
-
+    # Якщо кількість рецептів менша за необхідну — очищаємо і перезаписуємо заново
+    if count < len(sample_recipes):
+        cursor.execute("DELETE FROM recipes")
+        cursor.executemany('''
+            INSERT INTO recipes (title, ingredients, instructions, video_url, is_breakfast, is_lunch, is_dinner, is_baking, is_desserts)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ''', sample_recipes)
+    
     conn.commit()
     conn.close()
 
-def search_recipes(query: str):
-    """
-    Пошук рецептів (повертає точно 4 значення для bot.py: title, ingredients, description, link):
-    - Ігнорує '#'
-    - Враховує відмінки (відрізає остання літеру для слів від 4 символів)
-    """
-    if not query:
-        return []
-
-    clean_query = query.replace("#", "").strip().lower()
-
-    if not clean_query:
-        return []
-
-    if len(clean_query) >= 4:
-        search_term = clean_query[:-1]
-    else:
-        search_term = clean_query
-
+def add_recipe(title, ingredients, instructions, video_url, category="baking"):
+    """Додає новий рецепт у базу даних із визначеною категорією."""
     conn = get_connection()
     cursor = conn.cursor()
+    
+    is_breakfast = 1 if category == "breakfast" else 0
+    is_lunch = 1 if category == "lunch" else 0
+    is_dinner = 1 if category == "dinner" else 0
+    is_baking = 1 if category == "baking" else 0
+    is_desserts = 1 if category == "desserts" else 0
 
-    # Повертаємо 4 поля, як очікує bot.py у рядку 121
-    sql_query = """
-        SELECT title, ingredients, description, link FROM recipes 
-        WHERE LOWER(REPLACE(title, '#', '')) LIKE ? 
-           OR LOWER(REPLACE(ingredients, '#', '')) LIKE ?
-           OR LOWER(REPLACE(description, '#', '')) LIKE ?
-    """
-
-    param = f"%{search_term}%"
-    cursor.execute(sql_query, (param, param, param))
-
-    results = cursor.fetchall()
+    cursor.execute('''
+        INSERT INTO recipes (title, ingredients, instructions, video_url, is_breakfast, is_lunch, is_dinner, is_baking, is_desserts)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ''', (title.strip(), ingredients.strip(), instructions.strip(), video_url.strip(), is_breakfast, is_lunch, is_dinner, is_baking, is_desserts))
+    
+    conn.commit()
     conn.close()
-
-    return results
-
-# --- ФУНКЦІЇ ДЛЯ КНОПОК МЕНЮ ---
 
 def get_breakfast_recipes():
-    return search_recipes("сніданок")
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT title, ingredients, instructions, video_url FROM recipes WHERE is_breakfast = 1")
+    recipes = cursor.fetchall()
+    conn.close()
+    return recipes
 
 def get_lunch_recipes():
-    return search_recipes("обід")
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT title, ingredients, instructions, video_url FROM recipes WHERE is_lunch = 1")
+    recipes = cursor.fetchall()
+    conn.close()
+    return recipes
 
 def get_dinner_recipes():
-    return search_recipes("вечеря")
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT title, ingredients, instructions, video_url FROM recipes WHERE is_dinner = 1")
+    recipes = cursor.fetchall()
+    conn.close()
+    return recipes
 
 def get_baking_recipes():
-    return search_recipes("випічка")
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT title, ingredients, instructions, video_url FROM recipes WHERE is_baking = 1")
+    recipes = cursor.fetchall()
+    conn.close()
+    return recipes
 
 def get_dessert_recipes():
-    return search_recipes("десерт")
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT title, ingredients, instructions, video_url FROM recipes WHERE is_desserts = 1")
+    recipes = cursor.fetchall()
+    conn.close()
+    return recipes
 
 def get_video_recipes():
-    return search_recipes("відео")
-
-def add_recipe(title: str, ingredients: str, description: str, link: str = ""):
-    """Додавання нового рецепта."""
     conn = get_connection()
     cursor = conn.cursor()
-    cursor.execute(
-        "INSERT INTO recipes (title, ingredients, description, link) VALUES (?, ?, ?, ?)",
-        (title, ingredients, description, link)
-    )
-    conn.commit()
+    cursor.execute("SELECT title, ingredients, instructions, video_url FROM recipes WHERE video_url IS NOT NULL AND video_url != ''")
+    recipes = cursor.fetchall()
     conn.close()
+    return recipes
 
-def get_all_recipes():
-    """Отримання всіх рецептів (4 поля)."""
+def search_recipes(query):
+    """Шукає рецепти за допомогою Python (100% працює з кирилицею)."""
     conn = get_connection()
     cursor = conn.cursor()
-    cursor.execute("SELECT title, ingredients, description, link FROM recipes")
-    results = cursor.fetchall()
+    
+    cursor.execute("SELECT title, ingredients, instructions, video_url FROM recipes")
+    all_recipes = cursor.fetchall()
     conn.close()
-    return results
+    
+    search_query = query.strip().lower()
+    matched_recipes = []
+    
+    for recipe in all_recipes:
+        title = recipe[0] or ""
+        ingredients = recipe[1] or ""
+        
+        if search_query in title.lower() or search_query in ingredients.lower():
+            matched_recipes.append(recipe)
+            
+    return matched_recipes
