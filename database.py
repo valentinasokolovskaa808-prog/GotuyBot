@@ -1,39 +1,40 @@
 import sqlite3
 
-# сюди вставити ВСІ ваші початкові рецепти
-INITIAL_RECIPES = [
-    # ваш повний список рецептів...
-]
-
 def get_connection():
+    """Підключення до бази даних."""
     return sqlite3.connect("recipes.db")
 
 def init_db():
+    """Створення таблиці рецептів з 4 колонками (id, title, description, category)."""
     conn = get_connection()
     cursor = conn.cursor()
+
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS recipes (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             title TEXT NOT NULL,
-            description TEXT NOT NULL
+            description TEXT NOT NULL,
+            category TEXT DEFAULT ''
         )
     """)
-    cursor.execute("SELECT COUNT(*) FROM recipes")
-    count = cursor.fetchone()[0]
-    if count == 0:
-        cursor.executemany(
-            "INSERT INTO recipes (title, description) VALUES (?, ?)",
-            INITIAL_RECIPES
-        )
+
     conn.commit()
     conn.close()
 
 def search_recipes(query: str):
+    """
+    Пошук рецептів (повертає 4 поля, щоб bot.py не видавав ValueError):
+    - Ігнорує решітки '#'
+    - Враховує відмінки
+    """
     if not query:
         return []
+
     clean_query = query.replace("#", "").strip().lower()
+
     if not clean_query:
         return []
+
     if len(clean_query) >= 4:
         search_term = clean_query[:-1]
     else:
@@ -41,18 +42,25 @@ def search_recipes(query: str):
 
     conn = get_connection()
     cursor = conn.cursor()
+
+    # Пошук повертає 4 колонки: id, title, description, category
     sql_query = """
-        SELECT * FROM recipes 
+        SELECT id, title, description, category FROM recipes 
         WHERE LOWER(REPLACE(title, '#', '')) LIKE ? 
            OR LOWER(REPLACE(description, '#', '')) LIKE ?
+           OR LOWER(REPLACE(category, '#', '')) LIKE ?
     """
+
     param = f"%{search_term}%"
-    cursor.execute(sql_query, (param, param))
+    cursor.execute(sql_query, (param, param, param))
+
     results = cursor.fetchall()
     conn.close()
+
     return results
 
-# Функції для кнопок меню
+# --- ФУНКЦІЇ ДЛЯ КНОПОК МЕНЮ ---
+
 def get_breakfast_recipes():
     return search_recipes("сніданок")
 
@@ -71,20 +79,22 @@ def get_dessert_recipes():
 def get_video_recipes():
     return search_recipes("відео")
 
-def add_recipe(title: str, description: str):
+def add_recipe(title: str, description: str, category: str = ""):
+    """Додавання рецепта з 4 параметрами."""
     conn = get_connection()
     cursor = conn.cursor()
     cursor.execute(
-        "INSERT INTO recipes (title, description) VALUES (?, ?)",
-        (title, description)
+        "INSERT INTO recipes (title, description, category) VALUES (?, ?, ?)",
+        (title, description, category)
     )
     conn.commit()
     conn.close()
 
 def get_all_recipes():
+    """Отримання всіх рецептів (4 колонки)."""
     conn = get_connection()
     cursor = conn.cursor()
-    cursor.execute("SELECT * FROM recipes")
+    cursor.execute("SELECT id, title, description, category FROM recipes")
     results = cursor.fetchall()
     conn.close()
     return results
