@@ -90,7 +90,7 @@ def init_db():
         ("Смачний, ніжний курячий шніцель", "Рецепт та деталі у відео", "Дивіться відеорецепт у каналі", "https://t.me/gotuy_prosti_recepty/1949", 0, 1, 1, 0, 0)
     ]
 
-    # Якщо кількість рецептів менша за необхідну — очищаємо і перезаписуємо заново
+    # Якщо база порожня або там стара версія — перезаписуємо заново
     if count < len(sample_recipes):
         cursor.execute("DELETE FROM recipes")
         cursor.executemany('''
@@ -169,7 +169,26 @@ def get_video_recipes():
     return recipes
 
 def search_recipes(query):
-    """Шукає рецепти за допомогою Python (100% працює з кирилицею)."""
+    """
+    Шукає рецепти з підтримкою:
+    1. Видалення хештегу (#)
+    2. Врахування відмінків (відрізає останню літеру для слів від 4 символів)
+    """
+    if not query:
+        return []
+
+    # Видаляємо #, пробіли та переводимо в нижній регістр
+    clean_query = query.replace("#", "").strip().lower()
+
+    if not clean_query:
+        return []
+
+    # Якщо слово довше 3 символів — відрізаємо останній символ (для урахування відмінків)
+    if len(clean_query) >= 4:
+        search_term = clean_query[:-1]
+    else:
+        search_term = clean_query
+
     conn = get_connection()
     cursor = conn.cursor()
     
@@ -177,14 +196,13 @@ def search_recipes(query):
     all_recipes = cursor.fetchall()
     conn.close()
     
-    search_query = query.strip().lower()
     matched_recipes = []
-    
     for recipe in all_recipes:
-        title = recipe[0] or ""
-        ingredients = recipe[1] or ""
+        title = (recipe[0] or "").lower()
+        ingredients = (recipe[1] or "").lower()
+        instructions = (recipe[2] or "").lower()
         
-        if search_query in title.lower() or search_query in ingredients.lower():
+        if search_term in title or search_term in ingredients or search_term in instructions:
             matched_recipes.append(recipe)
             
     return matched_recipes
