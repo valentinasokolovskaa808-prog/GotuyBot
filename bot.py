@@ -108,7 +108,7 @@ class SearchRecipe(StatesGroup):
     waiting_for_query = State()
 
 
-# --- Допоміжна функція відправки рецептів ---
+# --- Допоміжна функція відправки рецептів з розумним форматуванням ---
 async def send_recipes_list(message: types.Message, results):
     if not results:
         await message.answer("⚠️ В цій категорії поки немає рецептів.")
@@ -116,13 +116,23 @@ async def send_recipes_list(message: types.Message, results):
 
     for title, ingredients, instructions, video_url in results:
         text = f"🍳 <b>{title}</b>\n\n"
-        text += f"🛒 <b>Інгредієнти:</b>\n{ingredients}\n\n"
-        text += f"👨‍🍳 <b>Приготування:</b>\n{instructions}"
         
-        if video_url:
-            text += f"\n\n▶️ <a href='{video_url}'>Дивитися відеорецепт</a>"
+        # Перевірка наявності реального тексту інгредієнтів
+        has_ingredients = ingredients and "у відео" not in ingredients.lower()
+        has_instructions = instructions and "у відео" not in instructions.lower() and "у каналі" not in instructions.lower()
+
+        if has_ingredients:
+            text += f"🛒 <b>Інгредієнти:</b>\n{ingredients}\n\n"
+        
+        if has_instructions:
+            text += f"👨‍🍳 <b>Приготування:</b>\n{instructions}\n\n"
             
-        await message.answer(text, parse_mode="HTML", disable_web_page_preview=True)
+        if video_url:
+            text += f"▶️ <a href='{video_url}'>Переглянути відеорецепт</a>"
+        elif not has_ingredients and not has_instructions:
+            text += "🎬 Повний рецепт дивіться у відео на нашому каналі."
+            
+        await message.answer(text.strip(), parse_mode="HTML", disable_web_page_preview=False)
 
 
 # --- 1. Команда /start ---
