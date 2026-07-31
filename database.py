@@ -6,7 +6,7 @@ def get_connection():
     return sqlite3.connect(DATABASE_NAME)
 
 def init_db():
-    """Створює таблицю рецептів та заповнює/поновлює її повним списком рецептів."""
+    """Створює таблицю рецептів та безпечно додає початкові рецепти, не видаляючи нові."""
     conn = get_connection()
     cursor = conn.cursor()
     
@@ -24,10 +24,6 @@ def init_db():
             is_desserts INTEGER DEFAULT 0
         )
     ''')
-    
-    # Перевіряємо, скільки зараз рецептів у базі
-    cursor.execute("SELECT COUNT(*) FROM recipes")
-    count = cursor.fetchone()[0]
     
     sample_recipes = [
         ("Соковиті січені рибні котлети", "Рецепт та деталі у відео", "Дивіться відеорецепт у каналі", "https://t.me/gotuy_prosti_recepty/2007", 0, 1, 1, 0, 0),
@@ -90,13 +86,14 @@ def init_db():
         ("Смачний, ніжний курячий шніцель", "Рецепт та деталі у відео", "Дивіться відеорецепт у каналі", "https://t.me/gotuy_prosti_recepty/1949", 0, 1, 1, 0, 0)
     ]
 
-    # Якщо база порожня або там стара версія — перезаписуємо заново
-    if count < len(sample_recipes):
-        cursor.execute("DELETE FROM recipes")
-        cursor.executemany('''
-            INSERT INTO recipes (title, ingredients, instructions, video_url, is_breakfast, is_lunch, is_dinner, is_baking, is_desserts)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ''', sample_recipes)
+    # Перевіряємо та додаємо лише ті рецепти, яких ще немає у базі за назвою
+    for r in sample_recipes:
+        cursor.execute("SELECT COUNT(*) FROM recipes WHERE title = ?", (r[0],))
+        if cursor.fetchone()[0] == 0:
+            cursor.execute('''
+                INSERT INTO recipes (title, ingredients, instructions, video_url, is_breakfast, is_lunch, is_dinner, is_baking, is_desserts)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ''', r)
     
     conn.commit()
     conn.close()
@@ -169,22 +166,18 @@ def get_video_recipes():
     return recipes
 
 def search_recipes(query):
-    """
-    Шукає рецепти з підтримкою:
-    1. Видалення хештегу (#)
-    2. Врахування відмінків (відрізає останню літеру для слів від 4 символів)
-    """
+    """Шукає рецепти з врахуванням хештегів та слів."""
     if not query:
         return []
 
-    # Видаляємо #, пробіли та переводимо в нижній регістр
     clean_query = query.replace("#", "").strip().lower()
 
     if not clean_query:
         return []
 
-    # Якщо слово довше 3 символів — відрізаємо останній символ (для урахування відмінків)
-    if len(clean_query) >= 4:
+    if len(clean_query) > 5:
+        search_term = clean_query[:-2]
+    elif len(clean_query) == 5:
         search_term = clean_query[:-1]
     else:
         search_term = clean_query
@@ -200,9 +193,8 @@ def search_recipes(query):
     for recipe in all_recipes:
         title = (recipe[0] or "").lower()
         ingredients = (recipe[1] or "").lower()
-        instructions = (recipe[2] or "").lower()
         
-        if search_term in title or search_term in ingredients or search_term in instructions:
+        if search_term in title or search_term in ingredients:
             matched_recipes.append(recipe)
             
     return matched_recipes
