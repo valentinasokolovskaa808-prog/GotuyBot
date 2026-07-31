@@ -13,8 +13,8 @@ from config import BOT_TOKEN
 from main_menu import main_menu, social_links_menu
 from database import init_db, search_recipes, get_connection
 
-# ⚠️ Вкажіть тут ваш особистий Telegram ID (дізнатися можна у бота @userinfobot)
-ADMIN_ID =  5270272994  
+# ⚠️ Вкажіть тут ваш особистий Telegram ID (отриманий через @userinfobot)
+ADMIN_ID = 123456789  
 
 # --- Заглушка сервера для Render ---
 class HealthCheckHandler(BaseHTTPRequestHandler):
@@ -92,7 +92,7 @@ class SearchRecipe(StatesGroup):
 async def start_cmd(message: types.Message, state: FSMContext):
     await state.clear()
     
-    # Зберігаємо користувача в базу
+    # Зберігаємо користувача в базу даних
     add_user(
         user_id=message.from_user.id,
         username=message.from_user.username,
@@ -117,13 +117,11 @@ async def cmd_stats(message: types.Message):
     )
 
 # --- 3. Команда /broadcast (Розсилка - тільки для Адміна) ---
-# Використання: /broadcast Привіт! У нас новий рецепт на каналі!
 @dp.message(Command("broadcast"))
 async def cmd_broadcast(message: types.Message):
     if message.from_user.id != ADMIN_ID:
         return
     
-    # Видаляємо команду з тексту
     text_to_send = message.text.replace("/broadcast", "").strip()
     
     if not text_to_send:
@@ -140,7 +138,7 @@ async def cmd_broadcast(message: types.Message):
         try:
             await bot.send_message(chat_id=user_id, text=text_to_send, parse_mode="HTML")
             success += 1
-            await asyncio.sleep(0.04)  # Безпечна пауза від бану Telegram
+            await asyncio.sleep(0.04)  # Безпечна пауза, щоб не перевищити ліміти Telegram
         except Exception:
             blocked += 1
 
@@ -220,6 +218,8 @@ async def default_text_search(message: types.Message, state: FSMContext):
         )
 
 async def main():
+    # Очищає накопичені повідомлення та скидає попереднє з'єднання (прибирає TelegramConflictError)
+    await bot.delete_webhook(drop_pending_updates=True)
     await dp.start_polling(bot)
 
 if __name__ == "__main__":
