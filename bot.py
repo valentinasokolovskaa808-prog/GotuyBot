@@ -118,7 +118,8 @@ async def start_cmd(message: types.Message, state: FSMContext):
 
 
 # --- 2. Статистика (команда /stats або кнопка "Статистика") ---
-@dp.message(F.text.contains("Статистика") | Command("stats"))
+@dp.message(Command("stats"))
+@dp.message(F.text.contains("Статистика"))
 async def cmd_stats(message: types.Message):
     if message.from_user.id != ADMIN_ID:
         return
