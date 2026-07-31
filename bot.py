@@ -12,7 +12,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.fsm.storage.memory import MemoryStorage
 
 import database
-from database import init_db, search_recipes, get_connection, get_recipes_by_category
+from database import init_db, search_recipes, get_connection
 from main_menu import main_menu, social_links_menu
 
 # --- Налаштування логування ---
@@ -87,6 +87,15 @@ def get_users_count():
     count = cursor.fetchone()[0]
     conn.close()
     return count
+
+def fetch_recipes_by_column(column_name: str):
+    """Прямий вибір рецептів за колонкою категорії з бази даних."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute(f"SELECT title, ingredients, instructions, video_url FROM recipes WHERE {column_name} = 1")
+    results = cursor.fetchall()
+    conn.close()
+    return results
 
 
 # --- Ініціалізація баз даних ---
@@ -217,31 +226,31 @@ async def cmd_broadcast(message: types.Message):
 @dp.message(F.text.contains("Сніданок"))
 async def show_breakfast(message: types.Message, state: FSMContext):
     await state.clear()
-    results = get_recipes_by_category("is_breakfast")
+    results = fetch_recipes_by_column("is_breakfast")
     await send_recipes_list(message, results)
 
 @dp.message(F.text.contains("Обід"))
 async def show_lunch(message: types.Message, state: FSMContext):
     await state.clear()
-    results = get_recipes_by_category("is_lunch")
+    results = fetch_recipes_by_column("is_lunch")
     await send_recipes_list(message, results)
 
 @dp.message(F.text.contains("Вечеря"))
 async def show_dinner(message: types.Message, state: FSMContext):
     await state.clear()
-    results = get_recipes_by_category("is_dinner")
+    results = fetch_recipes_by_column("is_dinner")
     await send_recipes_list(message, results)
 
 @dp.message(F.text.contains("Випічка"))
 async def show_baking(message: types.Message, state: FSMContext):
     await state.clear()
-    results = get_recipes_by_category("is_baking")
+    results = fetch_recipes_by_column("is_baking")
     await send_recipes_list(message, results)
 
 @dp.message(F.text.contains("Десерти"))
 async def show_desserts(message: types.Message, state: FSMContext):
     await state.clear()
-    results = get_recipes_by_category("is_desserts")
+    results = fetch_recipes_by_column("is_desserts")
     await send_recipes_list(message, results)
 
 @dp.message(F.text.contains("Відеорецепти"))
