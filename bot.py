@@ -12,7 +12,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.fsm.storage.memory import MemoryStorage
 
 import database
-from database import init_db, search_recipes, get_connection
+from database import init_db, search_recipes, get_connection, get_recipes_by_category
 from main_menu import main_menu, social_links_menu
 
 # --- Налаштування логування ---
@@ -99,12 +99,28 @@ class SearchRecipe(StatesGroup):
     waiting_for_query = State()
 
 
+# --- Допоміжна функція відправки рецептів ---
+async def send_recipes_list(message: types.Message, results):
+    if not results:
+        await message.answer("⚠️ В цій категорії поки немає рецептів.")
+        return
+
+    for title, ingredients, instructions, video_url in results:
+        text = f"🍳 <b>{title}</b>\n\n"
+        text += f"🛒 <b>Інгредієнти:</b>\n{ingredients}\n\n"
+        text += f"👨‍🍳 <b>Приготування:</b>\n{instructions}"
+        
+        if video_url:
+            text += f"\n\n▶️ <a href='{video_url}'>Дивитися відеорецепт</a>"
+            
+        await message.answer(text, parse_mode="HTML", disable_web_page_preview=True)
+
+
 # --- 1. Команда /start ---
 @dp.message(CommandStart())
 async def start_cmd(message: types.Message, state: FSMContext):
     await state.clear()
     
-    # Записуємо користувача в БД
     add_user(
         user_id=message.from_user.id,
         username=message.from_user.username,
@@ -197,7 +213,49 @@ async def cmd_broadcast(message: types.Message):
     )
 
 
-# --- 4. Кнопка "Наші соцмережі" ---
+# --- 4. Кнопки Категорій ---
+@dp.message(F.text.contains("Сніданок"))
+async def show_breakfast(message: types.Message, state: FSMContext):
+    await state.clear()
+    results = get_recipes_by_category("is_breakfast")
+    await send_recipes_list(message, results)
+
+@dp.message(F.text.contains("Обід"))
+async def show_lunch(message: types.Message, state: FSMContext):
+    await state.clear()
+    results = get_recipes_by_category("is_lunch")
+    await send_recipes_list(message, results)
+
+@dp.message(F.text.contains("Вечеря"))
+async def show_dinner(message: types.Message, state: FSMContext):
+    await state.clear()
+    results = get_recipes_by_category("is_dinner")
+    await send_recipes_list(message, results)
+
+@dp.message(F.text.contains("Випічка"))
+async def show_baking(message: types.Message, state: FSMContext):
+    await state.clear()
+    results = get_recipes_by_category("is_baking")
+    await send_recipes_list(message, results)
+
+@dp.message(F.text.contains("Десерти"))
+async def show_desserts(message: types.Message, state: FSMContext):
+    await state.clear()
+    results = get_recipes_by_category("is_desserts")
+    await send_recipes_list(message, results)
+
+@dp.message(F.text.contains("Відеорецепти"))
+async def show_video_recipes(message: types.Message, state: FSMContext):
+    await state.clear()
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT title, ingredients, instructions, video_url FROM recipes WHERE video_url IS NOT NULL AND video_url != ''")
+    results = cursor.fetchall()
+    conn.close()
+    await send_recipes_list(message, results)
+
+
+# --- 5. Кнопка "Наші соцмережі" ---
 @dp.message(F.text.contains("соцмереж"))
 async def show_social_links(message: types.Message, state: FSMContext):
     await state.clear()
@@ -209,7 +267,7 @@ async def show_social_links(message: types.Message, state: FSMContext):
     )
 
 
-# --- 5. Пошук рецепту ---
+# --- 6. Пошук рецепту ---
 @dp.message(F.text.contains("Пошук") | F.text.contains("пошук"))
 async def start_search(message: types.Message, state: FSMContext):
     await state.set_state(SearchRecipe.waiting_for_query)
@@ -219,7 +277,7 @@ async def start_search(message: types.Message, state: FSMContext):
     )
 
 
-# --- 6. Обробка тексту пошуку у стані SearchRecipe ---
+# --- 7. Обробка тексту пошуку у стані SearchRecipe ---
 @dp.message(SearchRecipe.waiting_for_query)
 async def process_search(message: types.Message, state: FSMContext):
     query = message.text.strip()
@@ -232,35 +290,18 @@ async def process_search(message: types.Message, state: FSMContext):
         )
         return
     
-    for title, ingredients, instructions, video_url in results:
-        text = f"🍳 <b>{title}</b>\n\n"
-        text += f"🛒 <b>Інгредієнти:</b>\n{ingredients}\n\n"
-        text += f"👨‍🍳 <b>Приготування:</b>\n{instructions}"
-        
-        if video_url:
-            text += f"\n\n▶️ <a href='{video_url}'>Дивитися відеорецепт</a>"
-            
-        await message.answer(text, parse_mode="HTML", disable_web_page_preview=True)
-    
+    await send_recipes_list(message, results)
     await state.clear()
 
 
-# --- 7. Загальний пошук за звичайним текстом ---
+# --- 8. Загальний пошук за звичайним текстом ---
 @dp.message(F.text)
 async def default_text_search(message: types.Message, state: FSMContext):
     query = message.text.strip()
     results = search_recipes(query)
     
     if results:
-        for title, ingredients, instructions, video_url in results:
-            text = f"🍳 <b>{title}</b>\n\n"
-            text += f"🛒 <b>Інгредієнти:</b>\n{ingredients}\n\n"
-            text += f"👨‍🍳 <b>Приготування:</b>\n{instructions}"
-            
-            if video_url:
-                text += f"\n\n▶️ <a href='{video_url}'>Дивитися відеорецепт</a>"
-                
-            await message.answer(text, parse_mode="HTML", disable_web_page_preview=True)
+        await send_recipes_list(message, results)
     else:
         await message.answer(
             "Скористайтеся кнопками меню нижче або введіть назву страви для пошуку (наприклад: <i>чебуреки</i>, <i>салат</i>, <i>деруни</i>):",
@@ -270,7 +311,6 @@ async def default_text_search(message: types.Message, state: FSMContext):
 
 
 async def main():
-    # Видаляємо вебхуки та скидаємо чергу, щоб уникнути TelegramConflictError
     await bot.delete_webhook(drop_pending_updates=True)
     await dp.start_polling(bot)
 
