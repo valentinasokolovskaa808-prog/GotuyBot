@@ -1,16 +1,20 @@
 import asyncio
 import logging
+import sqlite3
 from http.server import HTTPServer, BaseHTTPRequestHandler
 import threading
 
 from aiogram import Bot, Dispatcher, types, F
-from aiogram.filters import CommandStart
+from aiogram.filters import CommandStart, Command
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.fsm.context import FSMContext
 
 from config import BOT_TOKEN
 from main_menu import main_menu, social_links_menu
-from database import init_db, search_recipes
+from database import init_db, search_recipes, get_connection
+
+# ⚠️ Вкажіть тут ваш особистий Telegram ID (дізнатися можна у бота @userinfobot)
+ADMIN_ID =  5270272994  
 
 # --- Заглушка сервера для Render ---
 class HealthCheckHandler(BaseHTTPRequestHandler):
@@ -25,8 +29,54 @@ def run_dummy_server():
 
 threading.Thread(target=run_dummy_server, daemon=True).start()
 
-# --- Ініціалізація бази даних ---
+# --- Функції для роботи з користувачами ---
+def init_users_table():
+    """Створює таблицю users, якщо її ще немає."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS users (
+            user_id INTEGER PRIMARY KEY,
+            username TEXT,
+            first_name TEXT,
+            joined_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
+    conn.commit()
+    conn.close()
+
+def add_user(user_id: int, username: str, first_name: str):
+    """Зберігає нового користувача в базі (якщо його ще немає)."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute('''
+        INSERT OR IGNORE INTO users (user_id, username, first_name)
+        VALUES (?, ?, ?)
+    ''', (user_id, username, first_name))
+    conn.commit()
+    conn.close()
+
+def get_all_users():
+    """Повертає список усіх user_id для розсилки."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT user_id FROM users")
+    users = cursor.fetchall()
+    conn.close()
+    return [u[0] for u in users]
+
+def get_users_count():
+    """Повертає загальну кількість користувачів."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT COUNT(*) FROM users")
+    count = cursor.fetchone()[0]
+    conn.close()
+    return count
+
+# --- Ініціалізація баз даних ---
 init_db()
+init_users_table()
 
 # --- Налаштування бота ---
 logging.basicConfig(level=logging.INFO)
@@ -41,12 +91,67 @@ class SearchRecipe(StatesGroup):
 @dp.message(CommandStart())
 async def start_cmd(message: types.Message, state: FSMContext):
     await state.clear()
+    
+    # Зберігаємо користувача в базу
+    add_user(
+        user_id=message.from_user.id,
+        username=message.from_user.username,
+        first_name=message.from_user.first_name
+    )
+    
     await message.answer(
         "Ласкаво просимо до кулінарного бота «Готуй! Прості рецепти».\nОберіть потрібний розділ нижче:",
         reply_markup=main_menu
     )
 
-# --- 2. Обробник кнопки "Наші соцмережі" ---
+# --- 2. Команда /stats (Статистика - тільки для Адміна) ---
+@dp.message(Command("stats"))
+async def cmd_stats(message: types.Message):
+    if message.from_user.id != ADMIN_ID:
+        return
+    
+    total_users = get_users_count()
+    await message.answer(
+        f"📊 <b>Статистика бота:</b>\n\nВсього користувачів у базі: <b>{total_users}</b>",
+        parse_mode="HTML"
+    )
+
+# --- 3. Команда /broadcast (Розсилка - тільки для Адміна) ---
+# Використання: /broadcast Привіт! У нас новий рецепт на каналі!
+@dp.message(Command("broadcast"))
+async def cmd_broadcast(message: types.Message):
+    if message.from_user.id != ADMIN_ID:
+        return
+    
+    # Видаляємо команду з тексту
+    text_to_send = message.text.replace("/broadcast", "").strip()
+    
+    if not text_to_send:
+        await message.answer("⚠️ Введіть текст після команди.\n\nНаприклад:\n<code>/broadcast Привіт усім!</code>", parse_mode="HTML")
+        return
+
+    users = get_all_users()
+    await message.answer(f"🚀 Розпочато розсилку для {len(users)} користувачів...")
+    
+    success = 0
+    blocked = 0
+
+    for user_id in users:
+        try:
+            await bot.send_message(chat_id=user_id, text=text_to_send, parse_mode="HTML")
+            success += 1
+            await asyncio.sleep(0.04)  # Безпечна пауза від бану Telegram
+        except Exception:
+            blocked += 1
+
+    await message.answer(
+        f"✅ <b>Розсилку завершено!</b>\n\n"
+        f"✉️ Доставлено: <b>{success}</b>\n"
+        f"🚫 Заблокували бота: <b>{blocked}</b>",
+        parse_mode="HTML"
+    )
+
+# --- 4. Обробник кнопки "Наші соцмережі" ---
 @dp.message(F.text.contains("соцмереж"))
 async def show_social_links(message: types.Message, state: FSMContext):
     await state.clear()
@@ -57,7 +162,7 @@ async def show_social_links(message: types.Message, state: FSMContext):
         parse_mode="HTML"
     )
 
-# --- 3. Старт пошуку за кнопкою "Пошук рецепту" ---
+# --- 5. Старт пошуку за кнопкою "Пошук рецепту" ---
 @dp.message(F.text.contains("Пошук") | F.text.contains("пошук"))
 async def start_search(message: types.Message, state: FSMContext):
     await state.set_state(SearchRecipe.waiting_for_query)
@@ -66,7 +171,7 @@ async def start_search(message: types.Message, state: FSMContext):
         parse_mode="HTML"
     )
 
-# --- 4. Обробка пошукового запиту ---
+# --- 6. Обробка пошукового запиту ---
 @dp.message(SearchRecipe.waiting_for_query)
 async def process_search(message: types.Message, state: FSMContext):
     query = message.text.strip()
@@ -91,7 +196,7 @@ async def process_search(message: types.Message, state: FSMContext):
     
     await state.clear()
 
-# --- 5. Пошук за звичайним текстом (якщо користувач просто написав назву страви без натискання кнопки) ---
+# --- 7. Пошук за звичайним текстом ---
 @dp.message(F.text)
 async def default_text_search(message: types.Message, state: FSMContext):
     query = message.text.strip()
