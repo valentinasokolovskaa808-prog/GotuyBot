@@ -19,7 +19,7 @@ TOKEN = os.getenv("BOT_TOKEN")
 if not TOKEN:
     raise ValueError("Помилка: BOT_TOKEN не знайдено в змінних оточення!")
 
-ADMIN_ID = os.getenv("ADMIN_ID", None)
+ADMIN_ID = os.getenv("ADMIN_ID" =  5270272994)
 
 bot = Bot(token=TOKEN)
 dp = Dispatcher(storage=MemoryStorage())
